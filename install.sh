@@ -8,9 +8,7 @@ echo "==> Building Nexus Photos (release)..."
 cargo build --release
 
 echo "==> Installing binary to ~/.local/bin/nexus-photos..."
-mkdir -p ~/.local/bin
-cp target/release/nexus-photos ~/.local/bin/nexus-photos
-chmod +x ~/.local/bin/nexus-photos
+install -m 755 target/release/nexus-photos ~/.local/bin/nexus-photos
 
 echo "==> Installing UI components to ~/.local/share/nexus-photos/ui..."
 mkdir -p ~/.local/share/nexus-photos/ui
