@@ -1,0 +1,19 @@
+[package]
+name = "settings"
+version = "0.1.0"
+description = "A control panel for Omarchy, styled after the Strata file manager"
+license = "MIT"
+repository = "https://github.com/design-nexus/omarchy-settings"
+authors = ["Ken Smith"]
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
+toml = "1.1.6"
+
+[profile.release]
+lto = "thin"
+strip = true
