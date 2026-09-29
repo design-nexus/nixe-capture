@@ -13,6 +13,8 @@ gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 toml = "1.1.6"
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 
 [profile.release]
 lto = "thin"
