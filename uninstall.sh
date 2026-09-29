@@ -14,6 +14,14 @@ purge=false
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
 say() { printf '\033[1;34m::\033[0m %s\n' "$*"; }
 
+# The keyboard backlight helper runs this binary, so it goes with the app. Stop
+# it first, while the binary is still here to turn the backlight back on.
+if systemctl --user list-unit-files settings-kbd-idle.service >/dev/null 2>&1; then
+  systemctl --user disable --now settings-kbd-idle.service 2>/dev/null || true
+fi
+rm -f "$cfg/systemd/user/settings-kbd-idle.service"
+systemctl --user daemon-reload 2>/dev/null || true
+
 pkill -x settings 2>/dev/null || true
 
 if command -v omarchy-plugin-remove >/dev/null && [[ -d $cfg/omarchy/plugins/design-nexus.settings-gear ]]; then
@@ -23,7 +31,9 @@ rm -rf "$cfg/omarchy/plugins/design-nexus.settings-gear"
 
 rm -f "$HOME/.local/bin/settings" \
   "$HOME/.local/share/applications/io.github.design_nexus.Settings.desktop" \
-  "$HOME/.local/share/icons/hicolor/scalable/apps/io.github.design_nexus.Settings.svg"
+  "$HOME/.local/share/icons/hicolor/scalable/apps/io.github.design_nexus.Settings.svg" \
+  "$cfg/omarchy/hooks/theme-set.d/50-settings-theme" \
+  "$cfg/omarchy/hooks/theme-set.d/50-settings-aura"
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 say "Removed the app."
 
