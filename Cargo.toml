@@ -1,7 +1,7 @@
 [package]
 name = "settings"
 version = "0.2.1"
-description = "A control panel for Omarchy, styled after the Strata file manager"
+description = "A control panel for Omarchy"
 license = "MIT"
 repository = "https://github.com/design-nexus/omarchy-settings"
 authors = ["Ken Smith"]
