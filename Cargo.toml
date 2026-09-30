@@ -1,0 +1,30 @@
+[package]
+name = "nexus-torrents"
+version = "0.1.0"
+description = "A BitTorrent client for Omarchy on qBittorrent's engine, styled after the Strata file manager"
+license = "MIT"
+repository = "https://github.com/design-nexus/nexus-torrents"
+authors = ["Ken Smith"]
+edition = "2024"
+
+[[bin]]
+name = "torrents"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+async-channel = "2"
+cxx = "1"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
+libc = "0.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+toml = "1.1.6"
+
+[build-dependencies]
+cxx-build = "1"
+pkg-config = "0.3"
+
+[profile.release]
+lto = "thin"
+strip = true
