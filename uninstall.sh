@@ -34,6 +34,8 @@ rm -f "$HOME/.local/bin/settings" \
   "$HOME/.local/share/icons/hicolor/scalable/apps/io.github.design_nexus.Settings.svg" \
   "$cfg/omarchy/hooks/theme-set.d/50-settings-theme" \
   "$cfg/omarchy/hooks/theme-set.d/50-settings-aura"
+# Extensions are installed code, so they go with the app.
+rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/settings/extensions" "${XDG_CACHE_HOME:-$HOME/.cache}/settings"
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 say "Removed the app."
 
