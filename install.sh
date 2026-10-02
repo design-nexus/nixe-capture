@@ -67,8 +67,9 @@ mkdir -p "$bin" "$apps" "$icons"
 
 say "Installing to ~/.local"
 # Replace whatever is there (a file or a link), never write through a link.
-rm -f "$bin/nexus-media-player"
-install -m 755 "$src/target/release/nexus-media-player" "$bin/nexus-media-player"
+# (nexus-media-player is the command's old name.)
+rm -f "$bin/media-player" "$bin/nexus-media-player"
+install -m 755 "$src/target/release/media-player" "$bin/media-player"
 install -m 644 "$src/data/$APP_ID.desktop" "$apps/"
 install -m 644 "$src/data/$APP_ID.svg" "$icons/"
 update-desktop-database "$apps" 2>/dev/null || true
@@ -85,4 +86,4 @@ case ":$PATH:" in
   *) warn "$bin isn't on your PATH; launch Nexus Media Player from the app launcher, or add it to PATH." ;;
 esac
 
-say "Done. Open Nexus Media Player from the app launcher, or run: nexus-media-player"
+say "Done. Open Nexus Media Player from the app launcher, or run: media-player"

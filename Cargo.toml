@@ -8,7 +8,7 @@ authors = ["Ken Smith"]
 edition = "2024"
 
 [[bin]]
-name = "nexus-media-player"
+name = "media-player"
 path = "src/main.rs"
 
 [dependencies]

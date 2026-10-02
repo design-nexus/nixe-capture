@@ -11,8 +11,8 @@ purge=false
 
 say() { printf '\033[1;34m::\033[0m %s\n' "$*"; }
 
-pkill -x nexus-media-pla 2>/dev/null || true
-rm -f "$HOME/.local/bin/nexus-media-player" \
+pkill -x media-player 2>/dev/null || true
+rm -f "$HOME/.local/bin/media-player" "$HOME/.local/bin/nexus-media-player" \
   "$HOME/.local/share/applications/$APP_ID.desktop" \
   "$HOME/.local/share/icons/hicolor/scalable/apps/$APP_ID.svg"
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
