@@ -1,0 +1,29 @@
+[package]
+name = "nexus-media-player"
+version = "0.1.0"
+description = "A video player for Omarchy: movies and TV shows library, playlists, subtitles and an equalizer, played with mpv"
+license = "MIT"
+repository = "https://github.com/design-nexus/nexus-media-player"
+authors = ["Ken Smith"]
+edition = "2024"
+
+[[bin]]
+name = "nexus-media-player"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+async-channel = "2"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+regex = "1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+toml = "1.1.6"
+ureq = { version = "3", features = ["json"] }
+walkdir = "2.5"
+zbus = "5"
+
+[profile.release]
+lto = "thin"
+strip = true
