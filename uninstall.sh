@@ -2,7 +2,7 @@
 # Remove Music.
 #
 # Options:
-#   --purge   also remove its settings, library database, playlists and covers
+#   --purge   also remove its settings, library database, playlists, downloads and covers
 set -euo pipefail
 
 purge=false
