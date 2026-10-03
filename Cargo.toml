@@ -6,6 +6,7 @@ license = "MIT"
 repository = "https://github.com/design-nexus/omarchy-settings"
 authors = ["Ken Smith"]
 edition = "2024"
+default-run = "settings"
 
 [dependencies]
 anyhow = "1.0.104"

@@ -29,7 +29,7 @@ if command -v omarchy-plugin-remove >/dev/null && [[ -d $cfg/omarchy/plugins/des
 fi
 rm -rf "$cfg/omarchy/plugins/design-nexus.settings-gear"
 
-rm -f "$HOME/.local/bin/settings" \
+rm -f "$HOME/.local/bin/settings" "$HOME/.local/bin/settings-helper" \
   "$HOME/.local/share/applications/io.github.design_nexus.Settings.desktop" \
   "$HOME/.local/share/icons/hicolor/scalable/apps/io.github.design_nexus.Settings.svg" \
   "$cfg/omarchy/hooks/theme-set.d/50-settings-theme" \
@@ -38,6 +38,9 @@ rm -f "$HOME/.local/bin/settings" \
 rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/settings/extensions" "${XDG_CACHE_HOME:-$HOME/.cache}/settings"
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
 say "Removed the app."
+if [[ -e /usr/local/lib/settings/settings-helper ]]; then
+  say "Remove the Accounts helper too with: sudo rm -rf /usr/local/lib/settings /usr/share/polkit-1/actions/io.github.design_nexus.settings.policy"
+fi
 
 if [[ $purge == true ]]; then
   if systemctl --user list-unit-files settings-eq.service >/dev/null 2>&1; then

@@ -59,7 +59,7 @@ build_from() {
   say "Building Settings (a minute or two the first time)"
   (cd "$src" && cargo build --release --locked)
   mkdir -p "$work/payload"
-  cp "$src/target/release/settings" "$work/payload/settings"
+  cp "$src/target/release/settings" "$src/target/release/settings-helper" "$work/payload/"
   cp -r "$src/data" "$src/plugin" "$work/payload/"
   payload="$work/payload"
 }
@@ -93,6 +93,9 @@ mkdir -p "$bin" "$apps" "$icons"
 
 say "Installing to ~/.local"
 install -m 755 "$payload/settings" "$bin/settings"
+# The root helper for Accounts. It's copied to a root-owned place from
+# Settings → Accounts, which asks for your password then.
+[[ -x $payload/settings-helper ]] && install -m 755 "$payload/settings-helper" "$bin/settings-helper"
 install -m 644 "$payload/data/io.github.design_nexus.Settings.desktop" "$apps/"
 install -m 644 "$payload/data/io.github.design_nexus.Settings.svg" "$icons/"
 update-desktop-database "$apps" 2>/dev/null || true
