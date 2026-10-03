@@ -1,0 +1,27 @@
+[package]
+name = "nexus-pdf"
+version = "0.1.0"
+description = "A PDF viewer and editor for Omarchy: annotate, fill forms, sign, reorder pages and edit text"
+license = "MIT"
+repository = "https://github.com/design-nexus/nexus-pdf"
+authors = ["Ken Smith"]
+edition = "2024"
+
+[[bin]]
+name = "pdf"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+async-channel = "2"
+cairo-rs = { version = "0.22", features = ["png"] }
+gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
+lopdf = "0.45"
+poppler = { version = "0.26", package = "poppler-rs", features = ["v24_12"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.6"
+
+[profile.release]
+lto = "thin"
+strip = true
