@@ -1,0 +1,22 @@
+[package]
+name = "nexus-notepad"
+version = "0.1.0"
+description = "A plain-text notepad for Omarchy with tabs, adjustable fonts and sessions that keep unsaved text"
+license = "MIT"
+repository = "https://github.com/design-nexus/nexus-notepad"
+authors = ["Ken Smith"]
+edition = "2024"
+
+[[bin]]
+name = "notepad"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.6"
+
+[profile.release]
+lto = "thin"
+strip = true
