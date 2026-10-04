@@ -1,0 +1,24 @@
+[package]
+name = "nexus-archive"
+version = "0.1.0"
+description = "A 7-Zip archive manager for Omarchy: browse, extract and create archives"
+license = "MIT"
+repository = "https://github.com/design-nexus/nexus-archive"
+authors = ["Ken Smith"]
+edition = "2024"
+
+[[bin]]
+name = "archive"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+async-channel = "2"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+toml = "1.1.6"
+
+[profile.release]
+lto = "thin"
+strip = true
