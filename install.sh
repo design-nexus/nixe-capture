@@ -48,9 +48,11 @@ mkdir -p "$bin" "$apps" "$icons"
 
 say "Installing to ~/.local"
 install -m 755 "$src/target/release/nexus-photos" "$bin/nexus-photos"
-install -m 755 "$src/target/release/nexus-photos-viewer" "$bin/nexus-photos-viewer"
+install -m 755 "$src/target/release/npv" "$bin/npv"
 install -m 644 "$src/nexus-photos.desktop" "$apps/nexus-photos.desktop"
-install -m 644 "$src/nexus-photos-viewer.desktop" "$apps/nexus-photos-viewer.desktop"
+install -m 644 "$src/npv.desktop" "$apps/npv.desktop"
+# The viewer used to be called nexus-photos-viewer.
+rm -f "$bin/nexus-photos-viewer" "$apps/nexus-photos-viewer.desktop"
 install -m 644 "$src/assets/nexus-photos.svg" "$icons/io.github.nexus.photos.svg"
 update-desktop-database "$apps" 2>/dev/null || true
 gtk-update-icon-cache -q "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
