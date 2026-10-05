@@ -82,7 +82,8 @@ update-desktop-database "$apps" 2>/dev/null || true
 
 if [[ $make_default == true ]]; then
   for app in "${APPS[@]}"; do
-    types=$(sed -n 's/^MimeType=//p' "$src/packaging/nexus-$app.desktop" | tr ';' ' ')
+    # Text files stay with the text editor: Write is only offered for them.
+    types=$(sed -n 's/^MimeType=//p' "$src/packaging/nexus-$app.desktop" | tr ';' '\n' | { grep -v '^text/plain$\|^text/markdown$' || true; } | tr '\n' ' ')
     # shellcheck disable=SC2086
     xdg-mime default "nexus-$app.desktop" $types
   done
