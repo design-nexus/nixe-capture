@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.104"
-cairo-rs = { version = "0.22", features = ["pdf", "png"] }
+cairo-rs = { version = "0.22", features = ["pdf", "png", "v1_16"] }
 gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
 libspelling = "0.5"
 pangocairo = "0.22"
