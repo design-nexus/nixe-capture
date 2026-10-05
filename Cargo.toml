@@ -1,0 +1,24 @@
+[package]
+name = "nexus-fonts"
+version = "0.1.0"
+edition = "2024"
+description = "Browse, preview and install Google Fonts and Nerd Fonts"
+license = "MIT"
+repository = "https://github.com/design-nexus/nexus-fonts"
+
+[[bin]]
+name = "fonts"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+async-channel = "2"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+toml = "1.1.6"
+ureq = { version = "3", features = ["json"] }
+
+[profile.release]
+lto = "thin"
+strip = true
