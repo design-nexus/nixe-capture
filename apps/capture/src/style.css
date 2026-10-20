@@ -63,8 +63,9 @@ window.capture-countdown {
 }
 
 .editor-strip button.editor-tool {
+  min-width: 32px;
   min-height: 32px;
-  padding: 0 8px;
+  padding: 0;
   border-radius: 6px;
   border: none;
   background: transparent;

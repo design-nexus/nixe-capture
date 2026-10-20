@@ -38,17 +38,17 @@ enum Tool {
 }
 
 const TOOLS: &[(Tool, &str, &str)] = &[
-    (Tool::Arrow, "Arrow", "Arrow"),
-    (Tool::Line, "Line", "Line"),
-    (Tool::Rect, "Rect", "Rectangle"),
-    (Tool::Ellipse, "Oval", "Ellipse"),
-    (Tool::Pen, "Pen", "Freehand"),
-    (Tool::Highlighter, "Mark", "Highlighter"),
-    (Tool::Text, "Text", "Text"),
-    (Tool::Callout, "1", "Numbered marker"),
-    (Tool::Blur, "Blur", "Blur"),
-    (Tool::Pixelate, "Pixel", "Pixelate"),
-    (Tool::Crop, "Crop", "Crop"),
+    (Tool::Arrow, "capture-tool-arrow-symbolic", "Arrow"),
+    (Tool::Line, "capture-tool-line-symbolic", "Line"),
+    (Tool::Rect, "capture-tool-rect-symbolic", "Rectangle"),
+    (Tool::Ellipse, "capture-tool-ellipse-symbolic", "Ellipse"),
+    (Tool::Pen, "document-edit-symbolic", "Freehand"),
+    (Tool::Highlighter, "capture-tool-highlighter-symbolic", "Highlighter"),
+    (Tool::Text, "insert-text-symbolic", "Text"),
+    (Tool::Callout, "capture-tool-callout-symbolic", "Numbered marker"),
+    (Tool::Blur, "view-conceal-symbolic", "Blur"),
+    (Tool::Pixelate, "view-grid-symbolic", "Pixelate"),
+    (Tool::Crop, "zoom-fit-best-symbolic", "Crop"),
 ];
 
 enum Draft {
@@ -112,9 +112,12 @@ impl Editor {
         tools.set_hexpand(true);
         let mut tool_buttons = Vec::new();
         let mut first: Option<gtk::ToggleButton> = None;
-        for (tool, label, tip) in TOOLS {
-            let b = gtk::ToggleButton::with_label(label);
+        for (tool, icon, tip) in TOOLS {
+            let b = gtk::ToggleButton::new();
+            b.set_icon_name(icon);
             b.set_tooltip_text(Some(tip));
+            b.add_css_class("flat");
+            b.add_css_class("icon-button");
             b.add_css_class("editor-tool");
             match &first {
                 Some(f) => b.set_group(Some(f)),
@@ -147,15 +150,15 @@ impl Editor {
         size.set_size_request(88, -1);
         size.set_tooltip_text(Some("Size"));
 
-        let undo = widgets::icon_button("edit-undo-symbolic", "Undo");
-        let redo = widgets::icon_button("edit-redo-symbolic", "Redo");
-        let copy = gtk::Button::with_label("Copy");
+        let undo = widgets::icon_button("edit-undo-symbolic", "Undo (Ctrl+Z)");
+        let redo = widgets::icon_button("edit-redo-symbolic", "Redo (Ctrl+Shift+Z)");
+        let copy = widgets::icon_button("edit-copy-symbolic", "Copy annotated image (Ctrl+C)");
         copy.add_css_class("suggested-action");
-        let save = gtk::Button::with_label("Save");
-        let pin = gtk::Button::with_label("Pin");
-        let ocr = gtk::Button::with_label("OCR");
-        let redact = gtk::Button::with_label("Redact");
-        let close = gtk::Button::with_label("Close");
+        let save = widgets::icon_button("document-save-symbolic", "Save annotated image (Ctrl+S)");
+        let pin = widgets::icon_button("view-pin-symbolic", "Pin on the desktop");
+        let ocr = widgets::icon_button("insert-text-symbolic", "Read text in the shot");
+        let redact = widgets::icon_button("channel-secure-symbolic", "Redact emails, URLs, cards, and keys");
+        let close = widgets::icon_button("window-close-symbolic", "Close (Esc)");
 
         let strip = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         strip.add_css_class("editor-bar");
@@ -387,25 +390,12 @@ impl Editor {
     }
 
     fn pin(&self) {
-        let (img, id) = {
+        let img = {
             let slot = self.0.session.borrow();
             let Some(s) = slot.as_ref() else { return };
-            (annot::render(&s.original, s.history.current()), s.id.clone())
+            annot::render(&s.original, s.history.current())
         };
         crate::pin::open_rgba(img);
-        if let Some(id) = id {
-            crate::cmd::background(
-                move || {
-                    let db = store::open(&paths::library_db())?;
-                    db.set_pinned(&id, true)
-                },
-                |result| {
-                    if result.is_ok() {
-                        crate::window::reload();
-                    }
-                },
-            );
-        }
         self.write_sidecar();
     }
 

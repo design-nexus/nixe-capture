@@ -74,7 +74,6 @@ pub struct CaptureRow {
     pub height: i32,
     pub path: PathBuf,
     pub starred: bool,
-    pub pinned: bool,
     pub ocr_status: String,
     pub title: String,
     pub sensitive: bool,
@@ -174,7 +173,7 @@ impl Db {
     pub fn get(&self, id: &str) -> Result<Option<CaptureRow>> {
         self.conn
             .query_row(
-                "SELECT id, kind, created_at, width, height, path, starred, pinned, ocr_status, title, sensitive FROM captures WHERE id=?1",
+                "SELECT id, kind, created_at, width, height, path, starred, ocr_status, title, sensitive FROM captures WHERE id=?1",
                 params![id],
                 row_from,
             )
@@ -184,13 +183,12 @@ impl Db {
 
     pub fn list(&self, view: View, query: &str, limit: i64) -> Result<Vec<CaptureRow>> {
         let mut sql = String::from(
-            "SELECT c.id, c.kind, c.created_at, c.width, c.height, c.path, c.starred, c.pinned, c.ocr_status, c.title, c.sensitive
+            "SELECT c.id, c.kind, c.created_at, c.width, c.height, c.path, c.starred, c.ocr_status, c.title, c.sensitive
              FROM captures c",
         );
         let mut where_sql = Vec::new();
         match view {
             View::Starred => where_sql.push("c.starred=1"),
-            View::Pinned => where_sql.push("c.pinned=1"),
             View::Screenshots => where_sql.push("c.kind='screenshot'"),
             View::Recordings => where_sql.push("c.kind='recording'"),
             View::Recent => {}
@@ -221,11 +219,6 @@ impl Db {
         Ok(())
     }
 
-    pub fn set_pinned(&self, id: &str, on: bool) -> Result<()> {
-        self.conn.execute("UPDATE captures SET pinned=?2 WHERE id=?1", params![id, on as i32])?;
-        Ok(())
-    }
-
     pub fn set_sensitive(&self, id: &str, on: bool) -> Result<()> {
         if on {
             self.conn.execute("UPDATE captures SET sensitive=1, ocr='' WHERE id=?1", params![id])?;
@@ -243,7 +236,7 @@ impl Db {
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
         self.conn
             .query_row(
-                "SELECT id, kind, created_at, width, height, path, starred, pinned, ocr_status, title, sensitive
+                "SELECT id, kind, created_at, width, height, path, starred, ocr_status, title, sensitive
                  FROM captures WHERE path=?1 OR path LIKE '%/' || ?2 ORDER BY created_at DESC LIMIT 1",
                 params![as_str.as_ref(), name],
                 row_from,
@@ -352,10 +345,9 @@ fn row_from(r: &rusqlite::Row<'_>) -> rusqlite::Result<CaptureRow> {
         height: r.get(4)?,
         path: PathBuf::from(path),
         starred: r.get::<_, i32>(6)? != 0,
-        pinned: r.get::<_, i32>(7)? != 0,
-        ocr_status: r.get(8)?,
-        title: r.get(9)?,
-        sensitive: r.get::<_, i32>(10)? != 0,
+        ocr_status: r.get(7)?,
+        title: r.get(8)?,
+        sensitive: r.get::<_, i32>(9)? != 0,
     })
 }
 

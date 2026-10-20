@@ -106,7 +106,6 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
 fn view_from_section(section: &str) -> View {
     match section {
         "starred" => View::Starred,
-        "pinned" => View::Pinned,
         "screenshots" => View::Screenshots,
         "recordings" => View::Recordings,
         _ => View::Recent,
@@ -116,7 +115,6 @@ fn view_from_section(section: &str) -> View {
 fn section_id(view: View) -> &'static str {
     match view {
         View::Recent => "recent",
-        View::Pinned => "pinned",
         View::Screenshots => "screenshots",
         View::Recordings => "recordings",
         View::Starred => "starred",
@@ -126,7 +124,6 @@ fn section_id(view: View) -> &'static str {
 fn page_name(view: View) -> &'static str {
     match view {
         View::Recent => "Recent",
-        View::Pinned => "Pinned",
         View::Screenshots => "Screenshots",
         View::Recordings => "Recordings",
         View::Starred => "Starred",
@@ -173,7 +170,6 @@ fn empty_copy(view: View) -> &'static str {
     match view {
         View::Recordings => "No recordings yet. Ctrl+R records the focused monitor.",
         View::Starred => "Star a capture from the grid.",
-        View::Pinned => "Pin a capture from the editor to keep it here.",
         View::Screenshots => "No screenshots yet. Ctrl+N grabs a region.",
         View::Recent => "No captures yet. Ctrl+N grabs a region.",
     }
@@ -341,7 +337,6 @@ fn rebuild_nav() {
     }
     for (view, icon, label) in [
         (View::Recent, "document-open-recent-symbolic", "Recent"),
-        (View::Pinned, "view-pin-symbolic", "Pinned"),
         (View::Screenshots, "camera-photo-symbolic", "Screenshots"),
         (View::Recordings, "media-record-symbolic", "Recordings"),
         (View::Starred, "starred-symbolic", "Starred"),
@@ -436,30 +431,30 @@ fn build(app: &gtk::Application) {
     toolbar.add_css_class("toolbar");
     let tools = nixe_capture_core::detect::Tools::probe();
     if tools.grim {
-        let region = gtk::Button::with_label("Region");
+        let region = widgets::icon_button("capture-region-symbolic", "Capture a region (Ctrl+N)");
         region.add_css_class("suggested-action");
         region.connect_clicked(|_| capture_now(CaptureMode::SelectRegion));
         toolbar.append(&region);
         if tools.hyprctl {
-            let window_btn = gtk::Button::with_label("Window");
+            let window_btn = widgets::icon_button("focus-windows-symbolic", "Capture a window (Ctrl+Shift+N)");
             window_btn.connect_clicked(|_| capture_now(CaptureMode::SelectWindow));
             toolbar.append(&window_btn);
         }
-        let screen = gtk::Button::with_label("Screen");
+        let screen = widgets::icon_button("video-display-symbolic", "Capture the focused monitor (Ctrl+Shift+F)");
         screen.connect_clicked(|_| capture_now(CaptureMode::FullDesktop));
         toolbar.append(&screen);
         if tools.can_scroll() {
-            let scroll = gtk::Button::with_label("Scroll");
+            let scroll = widgets::icon_button("view-continuous-symbolic", "Scrolling capture (Ctrl+Shift+L)");
             scroll.connect_clicked(|_| start_scroll());
             toolbar.append(&scroll);
         }
     }
     if tools.can_record() {
-        let rec = gtk::Button::with_label("Record");
+        let rec = widgets::icon_button("media-record-symbolic", "Start a recording (Ctrl+R)");
         rec.connect_clicked(|_| toggle_record(false));
         RECORD_BTN.with(|b| *b.borrow_mut() = Some(rec.clone()));
         toolbar.append(&rec);
-        let pause = gtk::Button::with_label("Pause");
+        let pause = widgets::icon_button("media-playback-pause-symbolic", "Pause recording (Ctrl+Shift+P)");
         pause.set_visible(false);
         pause.connect_clicked(|_| pause_recording());
         PAUSE_BTN.with(|b| *b.borrow_mut() = Some(pause.clone()));
@@ -471,7 +466,7 @@ fn build(app: &gtk::Application) {
         refresh_record_button();
     }
     if tools.can_webcam() {
-        let cam = gtk::Button::with_label("Cam");
+        let cam = widgets::icon_button("camera-web-symbolic", "Picture-in-picture webcam");
         cam.connect_clicked(|_| toggle_webcam());
         CAM_BTN.with(|b| *b.borrow_mut() = Some(cam.clone()));
         toolbar.append(&cam);
@@ -660,11 +655,11 @@ fn finish_shot(
     match after {
         After::Edit => crate::editor::open(shot),
         After::Pin => {
-            remember(&shot, true);
+            remember(&shot);
             crate::pin::open_shot(shot);
         }
         other => {
-            remember(&shot, false);
+            remember(&shot);
             crate::cmd::background(
                 move || {
                     let action = Action { mode: CaptureMode::FullDesktop, after: other, delay: 0, save_path, ocr_langs: langs, ocr_mode, backend: String::new() };
@@ -738,7 +733,7 @@ fn start_overlay(mode: CaptureMode, after: After, langs: String, ocr_mode: OcrMo
     );
 }
 
-fn remember(shot: &nixe_capture_core::capture::Shot, pinned: bool) {
+fn remember(shot: &nixe_capture_core::capture::Shot) {
     if !prefs::get().history {
         return;
     }
@@ -755,9 +750,6 @@ fn remember(shot: &nixe_capture_core::capture::Shot, pinned: bool) {
         move || {
             let db = store::open(&paths::library_db())?;
             let (id, path) = db.insert_png(&paths::captures_dir(), &png, w, h, "grim")?;
-            if pinned {
-                db.set_pinned(&id, true)?;
-            }
             let _ = store::write_thumb(&path, &paths::thumb_file(&id), store::THUMB_EDGE);
             if ocr_on && let Ok(r) = recognize(&image, mode, &langs) {
                 let _ = db.set_ocr(&id, &r.engine, &r.text);
@@ -1013,10 +1005,12 @@ fn refresh_record_button() {
     RECORD_BTN.with(|b| {
         let Some(btn) = b.borrow().clone() else { return };
         if record::active().is_some() {
-            btn.set_label("Stop");
+            btn.set_icon_name("media-playback-stop-symbolic");
+            btn.set_tooltip_text(Some("Stop recording (Ctrl+R)"));
             btn.add_css_class("destructive-action");
         } else {
-            btn.set_label("Record");
+            btn.set_icon_name("media-record-symbolic");
+            btn.set_tooltip_text(Some("Start a recording (Ctrl+R)"));
             btn.remove_css_class("destructive-action");
         }
     });
@@ -1025,7 +1019,13 @@ fn refresh_record_button() {
         let session = record::active();
         btn.set_visible(record::can_pause());
         if let Some(session) = session {
-            btn.set_label(if session.paused { "Resume" } else { "Pause" });
+            if session.paused {
+                btn.set_icon_name("media-playback-start-symbolic");
+                btn.set_tooltip_text(Some("Resume recording (Ctrl+Shift+P)"));
+            } else {
+                btn.set_icon_name("media-playback-pause-symbolic");
+                btn.set_tooltip_text(Some("Pause recording (Ctrl+Shift+P)"));
+            }
         }
     });
     refresh_cam_button();
@@ -1037,8 +1037,10 @@ fn refresh_cam_button() {
         let Some(btn) = b.borrow().clone() else { return };
         if nixe_capture_core::webcam::active() {
             btn.add_css_class("suggested-action");
+            btn.set_tooltip_text(Some("Hide webcam overlay"));
         } else {
             btn.remove_css_class("suggested-action");
+            btn.set_tooltip_text(Some("Picture-in-picture webcam"));
         }
     });
 }
@@ -1095,7 +1097,7 @@ pub fn item_menu(id: &str, parent: &gtk::Widget, x: f64, y: f64) {
     open.add_css_class("flat");
     let star = gtk::Button::with_label(if row.starred { "Unstar" } else { "Star" });
     star.add_css_class("flat");
-    let pin = gtk::Button::with_label(if row.pinned { "Unpin" } else { "Pin" });
+    let pin = gtk::Button::with_label("Pin");
     pin.add_css_class("flat");
     let copy = gtk::Button::with_label("Copy");
     copy.add_css_class("flat");
@@ -1137,11 +1139,10 @@ pub fn item_menu(id: &str, parent: &gtk::Widget, x: f64, y: f64) {
         set_starred(&id_star, star_on);
     });
     let pop_pin = pop.clone();
-    let id_pin = row.id.clone();
-    let pin_on = !row.pinned;
+    let path_pin = row.path.clone();
     pin.connect_clicked(move |_| {
         pop_pin.popdown();
-        set_pinned_flag(&id_pin, pin_on);
+        pin_file(&path_pin);
     });
     let pop_copy = pop.clone();
     let path_copy = row.path.clone();
@@ -1166,15 +1167,11 @@ pub fn item_menu(id: &str, parent: &gtk::Widget, x: f64, y: f64) {
     pop.popup();
 }
 
-fn set_pinned_flag(id: &str, on: bool) {
-    let id = id.to_string();
-    crate::cmd::background(
-        move || store::open(&paths::library_db())?.set_pinned(&id, on),
-        |result| match result {
-            Ok(()) => reload(),
-            Err(err) => toast(&err.to_string()),
-        },
-    );
+fn pin_file(path: &std::path::Path) {
+    match image::open(path) {
+        Ok(img) => crate::pin::open_rgba(img.to_rgba8()),
+        Err(err) => toast(&err.to_string()),
+    }
 }
 
 fn export_capture(id: &str, name: &str) {

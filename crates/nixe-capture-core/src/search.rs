@@ -16,7 +16,6 @@ pub fn fts_match(input: &str) -> Option<String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum View {
     Recent,
-    Pinned,
     Screenshots,
     Recordings,
     Starred,
@@ -36,7 +35,6 @@ pub fn library_query(raw: &str) -> LibraryQuery {
     }
     for (prefix, view) in [
         ("capture starred", View::Starred),
-        ("capture pinned", View::Pinned),
         ("capture screenshots", View::Screenshots),
         ("capture recordings", View::Recordings),
     ] {
@@ -68,6 +66,6 @@ mod tests {
         assert_eq!(q.view, View::Starred);
         assert_eq!(q.text, "error");
         assert_eq!(library_query("kernel").text, "kernel");
-        assert_eq!(library_query("capture pinned").view, View::Pinned);
+        assert_eq!(library_query("capture screenshots").view, View::Screenshots);
     }
 }

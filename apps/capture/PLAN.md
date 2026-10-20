@@ -45,7 +45,6 @@ Photos already implements object markup (pen, highlighter, arrow, rectangle, ell
 Sidebar groups, in order:
 
 - **Recent**
-- **Pinned**
 - **Screenshots**
 - **Recordings** (empty state in Phase 1; records land here in Phase 2)
 - **Starred**
