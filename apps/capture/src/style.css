@@ -1,0 +1,126 @@
+.settings-navigation.compact button.nav-item {
+  min-width: 40px;
+  padding: 0;
+}
+
+.settings-navigation button.nav-item {
+  min-height: 42px;
+  padding: 0 12px;
+  margin: 1px 0;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: @theme_text;
+  font-weight: 500;
+}
+
+.settings-navigation button.nav-item:hover {
+  background: @row_hover;
+}
+
+.settings-navigation button.nav-item.active {
+  background: @nav_active;
+  box-shadow: none;
+}
+
+.toolbar {
+  min-height: 46px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid @hairline;
+}
+
+.empty-hint {
+  color: @theme_dim_text;
+  padding: 24px;
+}
+
+window.capture-overlay {
+  background: transparent;
+}
+
+window.capture-countdown {
+  background: transparent;
+}
+
+.capture-countdown-card {
+  background: @theme_bg;
+  color: @theme_text;
+  padding: 16px 24px;
+  border-radius: 8px;
+  min-width: 120px;
+}
+
+.capture-countdown-num {
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.editor-bar {
+  min-height: 46px;
+  padding: 6px 12px;
+  border-top: 1px solid @hairline;
+}
+
+.editor-strip button.editor-tool {
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: @theme_text;
+}
+
+.editor-strip button.editor-tool:checked {
+  background: @nav_active;
+  color: @theme_accent;
+}
+
+.swatch-button {
+  padding: 2px;
+  border: none;
+  background: transparent;
+  min-width: 22px;
+  min-height: 22px;
+}
+
+.swatch-dot {
+  min-width: 16px;
+  min-height: 16px;
+  border-radius: 8px;
+  border: 1px solid @hairline;
+}
+
+window.capture-pin {
+  background: @theme_bg;
+}
+
+.dialog-card textview {
+  background: @theme_bg;
+  color: @theme_text;
+}
+
+.pin-bar {
+  min-height: 36px;
+  padding: 4px 8px 4px 12px;
+  border-top: 1px solid @hairline;
+}
+
+.history-grid {
+  padding: 8px 12px 16px 12px;
+}
+
+.history-cell {
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.history-cell:hover {
+  background: @row_hover;
+}
+
+.history-star {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+}

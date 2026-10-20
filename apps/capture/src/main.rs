@@ -1,0 +1,413 @@
+//! Capture — screenshots, annotation, and OCR for Omarchy.
+
+mod cmd;
+mod control;
+mod editor;
+mod grid;
+mod ocr_view;
+mod overlay;
+mod pin;
+mod paths;
+mod prefs;
+mod settings_dialog;
+mod settings_page;
+mod theme;
+mod widgets;
+mod window;
+
+use gtk::prelude::*;
+use gtk::{gio, glib};
+use nixe_capture_core::action::{self, Action, Outcome};
+use nixe_capture_core::capture::CaptureMode;
+use nixe_capture_core::ocr::OcrMode;
+
+pub const APP_ID: &str = "io.github.design_nexus.nixe.Capture";
+
+const USAGE: &str = "Usage: nixe-capture [OPTIONS]\n\
+\n\
+  --region            drag a region\n\
+  --window            pick a window\n\
+  --active-window     the focused window\n\
+  --monitor [NAME]    one monitor (focused if NAME is omitted)\n\
+  --fullscreen        the focused monitor\n\
+  --delay SECS        wait before capturing\n\
+  --ocr               copy recognized text\n\
+  --pin               pin the shot after capture\n\
+  --copy              put the image on the clipboard (default)\n\
+  --save [PATH]       write a PNG\n\
+  --edit              open the annotation editor\n\
+  --scroll            scrolling region via omasnap\n\
+  --record            start a recording of the focused monitor\n\
+  --record --region   pick a region, then record\n\
+  --record --stop     stop the current recording\n\
+  --record --pause    pause or resume (gpu-screen-recorder)\n\
+  --record --webcam   picture-in-picture camera (mpv WebcamOverlay)\n\
+  --section ID        open Recent, Starred, or settings\n\
+  --toggle            close the window if it's open, otherwise open it\n";
+
+fn main() -> glib::ExitCode {
+    nixe_core::app::init(nixe_core::app::App { slug: "nixe-capture", name: "Capture" });
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        print!("{USAGE}");
+        return glib::ExitCode::SUCCESS;
+    }
+
+    if has_flag(&args, "--gst-worker") {
+        return match nixe_capture_core::record::run_gst_worker() {
+            Ok(()) => glib::ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("{err}");
+                glib::ExitCode::FAILURE
+            }
+        };
+    }
+
+    if has_flag(&args, "--scroll") && !primary_running() && !has_flag(&args, "--edit") {
+        return match run_scroll() {
+            Ok(path) => {
+                eprintln!("{}", path.display());
+                glib::ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                glib::ExitCode::FAILURE
+            }
+        };
+    }
+
+    if has_flag(&args, "--record") && !primary_running() {
+        match run_record(&args) {
+            Ok(()) => return glib::ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("{err}");
+                return glib::ExitCode::FAILURE;
+            }
+        }
+    }
+
+    if let Some(action) = cli_action(&args)
+        && !matches!(action.after, action::After::Edit | action::After::Pin)
+        && !primary_running()
+    {
+        match run_cli(&action) {
+            Ok(Outcome::Cancelled) => {}
+            Ok(Outcome::Copied) => {}
+            Ok(Outcome::Saved(path)) => eprintln!("{}", path.display()),
+            Ok(Outcome::Text(text)) => {
+                if !text.is_empty() {
+                    eprintln!("{text}");
+                }
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                return glib::ExitCode::FAILURE;
+            }
+        }
+        return glib::ExitCode::SUCCESS;
+    }
+
+    if std::env::var_os("GSK_RENDERER").is_none() {
+        // SAFETY: still single-threaded; nothing else reads the environment yet.
+        unsafe { std::env::set_var("GSK_RENDERER", "ngl") };
+    }
+
+    let app = gtk::Application::builder().application_id(APP_ID).flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE).build();
+    app.connect_startup(|app| {
+        theme::install();
+        overlay::mark_theme_installed();
+        nixe_core::control::serve_async(app, control::tools(), control::handle);
+    });
+    app.connect_command_line(|app, cl| {
+        let argv: Vec<String> = cl.arguments().iter().map(|a| a.to_string_lossy().to_string()).collect();
+        let has = |flag: &str| argv.iter().any(|a| a == flag);
+        let value = |flag: &str| argv.iter().position(|a| a == flag).and_then(|i| argv.get(i + 1)).cloned();
+        if has("--toggle")
+            && let Some(w) = window::window()
+            && w.is_visible()
+        {
+            w.close();
+            return glib::ExitCode::SUCCESS;
+        }
+        if has("--scroll") {
+            if window::window().is_none() {
+                window::present(app, None);
+            }
+            window::start_scroll();
+            return glib::ExitCode::SUCCESS;
+        }
+        if has("--record") {
+            if has("--stop") {
+                window::stop_recording();
+            } else if has("--pause") {
+                window::pause_recording();
+            } else {
+                window::start_recording(has("--region"));
+            }
+            return glib::ExitCode::SUCCESS;
+        }
+        if let Some(action) = cli_action(&argv) {
+            if matches!(action.after, action::After::Edit | action::After::Pin) || window::window().is_none() {
+                window::present(app, value("--section").as_deref());
+            }
+            window::capture_with(action.mode, action.after, action.delay);
+            return glib::ExitCode::SUCCESS;
+        }
+        window::present(app, value("--section").as_deref());
+        glib::ExitCode::SUCCESS
+    });
+    app.connect_shutdown(|_| {
+        prefs::flush();
+    });
+    app.run()
+}
+
+/// Session bus name of a live Capture window. A second `--region --copy` must
+/// reach that process so two Exclusive overlays never fight.
+fn primary_running() -> bool {
+    name_owned(APP_ID)
+}
+
+fn name_owned(name: &str) -> bool {
+    let Ok(bus) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE) else {
+        return false;
+    };
+    let Ok(reply) = bus.call_sync(
+        Some("org.freedesktop.DBus"),
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "NameHasOwner",
+        Some(&(name,).to_variant()),
+        Some(glib::VariantTy::new("(b)").unwrap()),
+        gio::DBusCallFlags::NONE,
+        200,
+        gio::Cancellable::NONE,
+    ) else {
+        return false;
+    };
+    reply.child_value(0).get::<bool>().unwrap_or(false)
+}
+
+fn has_flag(args: &[String], flag: &str) -> bool {
+    args.iter().any(|a| a == flag)
+}
+
+fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
+    args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).map(|s| s.as_str()).filter(|s| !s.starts_with('-'))
+}
+
+fn cli_action(args: &[String]) -> Option<Action> {
+    let mode = if has_flag(args, "--region") {
+        CaptureMode::SelectRegion
+    } else if has_flag(args, "--window") {
+        CaptureMode::SelectWindow
+    } else if has_flag(args, "--active-window") {
+        CaptureMode::ActiveWindow
+    } else if has_flag(args, "--fullscreen") {
+        CaptureMode::FullDesktop
+    } else if has_flag(args, "--monitor") {
+        match flag_value(args, "--monitor") {
+            Some(name) => CaptureMode::Monitor(name.to_string()),
+            None => CaptureMode::FullDesktop,
+        }
+    } else if has_flag(args, "--ocr") || has_flag(args, "--pin") || has_flag(args, "--edit") {
+        CaptureMode::SelectRegion
+    } else {
+        return None;
+    };
+    let delay = flag_value(args, "--delay").and_then(|s| s.parse().ok()).unwrap_or(0);
+    let save = has_flag(args, "--save");
+    let ocr = has_flag(args, "--ocr");
+    let pin = has_flag(args, "--pin");
+    let edit = has_flag(args, "--edit");
+    let copy = has_flag(args, "--copy") || (!save && !ocr && !pin && !edit);
+    let after = action::parse_after(copy, save, ocr, pin, edit).ok()?;
+    let save_path = if save { flag_value(args, "--save").map(std::path::PathBuf::from) } else { None };
+    let prefs = prefs::get();
+    Some(Action {
+        mode,
+        after,
+        delay,
+        save_path,
+        ocr_langs: prefs.ocr_langs,
+        ocr_mode: OcrMode::parse(&prefs.ocr_mode),
+        backend: prefs.backend,
+    })
+}
+
+fn run_record(args: &[String]) -> anyhow::Result<()> {
+    use nixe_capture_core::record::{self, Container, RecordRequest, Target};
+    if has_flag(args, "--stop") {
+        if let Some(path) = record::stop()? {
+            eprintln!("{}", path.display());
+        }
+        return Ok(());
+    }
+    if has_flag(args, "--pause") {
+        let paused = record::toggle_pause()?;
+        eprintln!("{}", if paused { "paused" } else { "recording" });
+        return Ok(());
+    }
+    let delay = flag_value(args, "--delay").and_then(|s| s.parse().ok()).unwrap_or(prefs::get().record_delay);
+    if delay > 0 && !overlay::run_countdown_blocking(delay) {
+        return Ok(());
+    }
+    let prefs = prefs::get();
+    let pipewire = nixe_capture_core::record::pick(&prefs.recorder) == Some(nixe_capture_core::RecordBackend::GstPortal);
+    let target = if pipewire {
+        Target::Portal
+    } else if has_flag(args, "--region") {
+        match pick_record_region() {
+            Ok(t) => t,
+            Err(err) if err.to_string() == "cancelled" => return Ok(()),
+            Err(err) => return Err(err),
+        }
+    } else if prefs.record_use_portal {
+        Target::Portal
+    } else {
+        record::default_target()?
+    };
+    let (desktop_audio, microphone) = match prefs.record_audio.as_str() {
+        "mic" => (false, true),
+        "both" => (true, true),
+        "none" => (false, false),
+        _ => (true, false),
+    };
+    let container = Container::parse(&prefs.record_container);
+    let dir = if prefs.history { paths::captures_dir() } else { record::default_output_dir() };
+    let output = record::output_path(&dir, container);
+    let with_cam = has_flag(args, "--webcam") || prefs.record_webcam;
+    if with_cam && nixe_capture_core::webcam::available() {
+        let device = if prefs.record_webcam_device.is_empty() { None } else { Some(prefs.record_webcam_device.as_str()) };
+        if let Err(err) = nixe_capture_core::webcam::start(device, nixe_capture_core::webcam::Size::parse(&prefs.record_webcam_size), true)
+        {
+            eprintln!("{err}");
+        }
+    }
+    let session = record::start(&RecordRequest {
+        target,
+        desktop_audio,
+        microphone,
+        cursor: prefs.record_cursor,
+        container,
+        fps: 60,
+        output,
+        backend: prefs.recorder,
+    });
+    match session {
+        Ok(session) => {
+            eprintln!("{}", session.path.display());
+            Ok(())
+        }
+        Err(err) => {
+            if with_cam {
+                nixe_capture_core::webcam::stop();
+            }
+            Err(err)
+        }
+    }
+}
+
+fn run_scroll() -> anyhow::Result<std::path::PathBuf> {
+    let dir = if prefs::get().history { paths::captures_dir() } else { nixe_capture_core::action::default_save_dir() };
+    let path = nixe_capture_core::scroll::capture(&dir)?;
+    if prefs::get().history {
+        let img = image::open(&path)?;
+        let db = nixe_capture_core::store::open(&paths::library_db())?;
+        let id = db.insert(&nixe_capture_core::store::NewCapture {
+            kind: nixe_capture_core::CaptureKind::Screenshot,
+            width: img.width() as i32,
+            height: img.height() as i32,
+            path: path.clone(),
+            source: "omasnap".into(),
+        })?;
+        let _ = nixe_capture_core::store::write_thumb(&path, &paths::thumb_file(&id), nixe_capture_core::store::THUMB_EDGE);
+    }
+    Ok(path)
+}
+
+fn pick_record_region() -> anyhow::Result<nixe_capture_core::record::Target> {
+    use nixe_capture_core::record::Target;
+    if overlay::prefer() && overlay::supported() {
+        overlay::ensure_gtk()?;
+        let still = overlay::freeze()?;
+        let picked = {
+            let result = std::rc::Rc::new(std::cell::RefCell::new(None));
+            let main = glib::MainLoop::new(None, false);
+            let result2 = result.clone();
+            let main2 = main.clone();
+            overlay::pick(still, false, move |rect| {
+                *result2.borrow_mut() = Some(rect);
+                main2.quit();
+            })?;
+            main.run();
+            result.borrow_mut().take().flatten()
+        };
+        let Some(rect) = picked else {
+            anyhow::bail!("cancelled");
+        };
+        return Ok(Target::Region(rect));
+    }
+    match nixe_capture_core::capture::slurp_region()? {
+        Some(rect) => Ok(Target::Region(rect)),
+        None => anyhow::bail!("cancelled"),
+    }
+}
+
+fn run_cli(action: &Action) -> anyhow::Result<Outcome> {
+    let select = matches!(action.mode, CaptureMode::SelectRegion | CaptureMode::SelectWindow);
+    let mut action = action.clone();
+    if action.delay > 0 && !overlay::run_countdown_blocking(action.delay) {
+        return Ok(Outcome::Cancelled);
+    }
+    action.delay = 0;
+    if select && overlay::prefer() {
+        match overlay::run_cli(&action) {
+            Ok(outcome) => return Ok(outcome),
+            Err(err) => eprintln!("nixe-capture: overlay unavailable ({err}); using slurp"),
+        }
+    }
+    action::require_tools_for(&action.mode, action.after, action.ocr_mode)?;
+    action::run(&action)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nixe_capture_core::action::After;
+
+    #[test]
+    fn region_copy_is_a_cli_action() {
+        let args = vec!["nixe-capture".into(), "--region".into(), "--copy".into()];
+        let a = cli_action(&args).expect("action");
+        assert!(matches!(a.mode, CaptureMode::SelectRegion));
+        assert!(matches!(a.after, After::Copy));
+    }
+
+    #[test]
+    fn bare_launch_opens_the_window() {
+        let args = vec!["nixe-capture".into()];
+        assert!(cli_action(&args).is_none());
+    }
+
+    #[test]
+    fn pin_and_edit_are_cli_actions() {
+        let pin = cli_action(&["nixe-capture".into(), "--pin".into()]).expect("pin");
+        assert!(matches!(pin.mode, CaptureMode::SelectRegion));
+        assert!(matches!(pin.after, After::Pin));
+        let edit = cli_action(&["nixe-capture".into(), "--region".into(), "--edit".into()]).expect("edit");
+        assert!(matches!(edit.after, After::Edit));
+    }
+
+    #[test]
+    fn delay_parses_on_fullscreen() {
+        let a = cli_action(&["nixe-capture".into(), "--fullscreen".into(), "--delay".into(), "3".into(), "--copy".into()]).expect("action");
+        assert_eq!(a.delay, 3);
+        assert!(matches!(a.after, After::Copy));
+    }
+
+    #[test]
+    fn a_missing_bus_name_is_not_the_primary() {
+        assert!(!name_owned("io.github.design_nexus.nixe.Capture.NotRunning"));
+    }
+}

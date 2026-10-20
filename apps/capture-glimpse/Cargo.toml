@@ -1,0 +1,18 @@
+[package]
+name = "nixe-capture-glimpse"
+version = "0.1.0"
+description = "Glimpse search plugin for the local Capture library"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "nixe-capture-glimpse"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+glimpse-plugin-sdk = { path = "../../crates/glimpse-plugin-sdk" }
+nixe-capture-core = { path = "../../crates/nixe-capture-core" }
+serde_json = "1.0.151"

@@ -1,0 +1,25 @@
+[package]
+name = "nixe-capture-core"
+version = "0.1.0"
+description = "Screenshot capture, OCR, and history library for Nixe Capture"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+ashpd = { version = "0.13", default-features = false, features = ["tokio", "screenshot", "screencast"] }
+libc = "0.2"
+cairo = { version = "0.22", package = "cairo-rs" }
+tokio = { version = "1", default-features = false, features = ["rt", "time", "net", "io-util"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+ort = "=2.0.0-rc.12"
+pango = "0.22"
+pangocairo = "0.22"
+rapidocr-core = "0.2.2"
+regex = "1"
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+uuid = { version = "1", features = ["v4"] }

@@ -1,0 +1,27 @@
+[Desktop Entry]
+Type=Application
+Name=Capture
+GenericName=Screenshot
+Comment=Take screenshots, annotate them, and copy text from the screen
+Exec=nixe-capture
+Icon=io.github.design_nexus.nixe.Capture
+Terminal=false
+Categories=Utility;Graphics;GTK;
+Keywords=screenshot;capture;ocr;annotate;record;
+StartupNotify=true
+StartupWMClass=io.github.design_nexus.nixe.Capture
+SingleMainWindow=true
+DBusActivatable=false
+Actions=region;window;fullscreen;
+
+[Desktop Action region]
+Name=Capture a region
+Exec=nixe-capture --region --copy
+
+[Desktop Action window]
+Name=Capture a window
+Exec=nixe-capture --window --copy
+
+[Desktop Action fullscreen]
+Name=Capture the screen
+Exec=nixe-capture --fullscreen --copy
