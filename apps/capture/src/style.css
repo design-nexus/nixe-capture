@@ -27,6 +27,7 @@
 .toolbar {
   min-height: 46px;
   padding: 0 12px 0 16px;
+  background: none;
   border-bottom: 1px solid @hairline;
 }
 
@@ -83,8 +84,32 @@ window.capture-pill {
 
 .editor-bar {
   min-height: 46px;
-  padding: 6px 12px;
+  padding: 6px 8px;
   border-top: 1px solid @hairline;
+}
+
+/* The actions match the tools, so the bar fits one row at 800 px. */
+window.capture-editor .editor-bar > button,
+window.capture-editor .editor-bar > menubutton > button {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 2px;
+}
+
+/* Menu buttons are flat like the icon buttons beside them. */
+window.capture-editor .editor-bar > menubutton > button {
+  background: transparent;
+  border-color: transparent;
+}
+
+window.capture-editor .editor-bar > menubutton > button:hover,
+window.capture-editor .editor-bar > menubutton > button:checked {
+  background: @row_hover;
+}
+
+.editor-strip > flowboxchild {
+  padding: 0;
+  min-width: 0;
 }
 
 .editor-strip button.editor-tool {
@@ -133,16 +158,67 @@ window.capture-pin {
 }
 
 .history-grid {
-  padding: 8px 12px 16px 12px;
+  padding: 0 12px 16px 12px;
+  background: none;
+}
+
+.history-grid > row {
+  padding: 4px 0;
+  background: none;
+}
+
+.history-day {
+  margin: 14px 4px 2px 4px;
+  font-weight: 700;
+  color: @theme_dim_text;
 }
 
 .history-cell {
   padding: 4px;
   border-radius: 8px;
+  border: 2px solid transparent;
 }
 
 .history-cell:hover {
   background: @row_hover;
+}
+
+.history-cell:focus-visible {
+  border-color: alpha(@theme_accent, 0.6);
+}
+
+.history-cell.selected {
+  background: @nav_active;
+  border-color: @theme_accent;
+}
+
+.history-picture {
+  border-radius: 6px;
+}
+
+.history-check {
+  min-width: 22px;
+  min-height: 22px;
+  border-radius: 999px;
+  color: @theme_on_accent;
+  background: @theme_accent;
+}
+
+.selection-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.9em;
+  color: @theme_accent;
+  background: alpha(@theme_accent, 0.14);
+}
+
+button.toast-action {
+  min-height: 28px;
+  margin: -4px -8px -4px 0;
+  padding: 0 12px;
+  font-weight: 700;
+  color: @theme_accent;
 }
 
 .history-star {

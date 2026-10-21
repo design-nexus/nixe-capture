@@ -17,7 +17,10 @@
 - Anything that leaves the editor uses the edited picture: `export::shareable(_png)` for
   copy, pin and Nixe Assistant; `Db::thumb` for thumbnails (remade when older than the
   sidecar). Blur and pixelate have a floor (`MIN_OBSCURE`); Redact uses solid `Fill` boxes.
-- History is a virtualized `GridView`; thumbs live in `~/.cache/nixe-capture/thumbs`
+- History is a virtualized `ListView` of `grid::Line`s: day headers and rows of cells,
+  rebuilt when the width changes the columns. `grid` keeps the selection by id. Deleting
+  hides rows (`window::PENDING`) and removes them when the Undo toast has gone, or at
+  close/shutdown (`flush_deletes`). Thumbs live in `~/.cache/nixe-capture/thumbs`
   (`{id}.jpg`, recorded in `thumb_path`). Retention prunes unstarred screenshots on
   launch; recordings (saved in Videos) aren't pruned. Schema 2 turned old pinned rows
   into starred ones. History off: nothing is inserted (scroll captures go to the save

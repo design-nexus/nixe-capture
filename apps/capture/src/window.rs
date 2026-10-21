@@ -32,6 +32,10 @@ pub const SHORTCUTS: &[(&[&str], &str)] = &[
     (&["Ctrl", "Shift", "R"], "Record a region"),
     (&["Ctrl", "Alt", "P"], "Pause or resume a recording"),
     (&["Ctrl", "F"], "Search history"),
+    (&["Ctrl", "Click"], "Select captures (Shift+Click for a range)"),
+    (&["Ctrl", "A"], "Select every capture shown"),
+    (&["Delete"], "Delete the selected captures"),
+    (&["Esc"], "Clear the selection"),
     (&["Ctrl", "B"], "Collapse or expand sidebar"),
     (&["Ctrl", ","], "Settings"),
     (&["F1"], "Show keyboard shortcuts"),
@@ -46,8 +50,9 @@ struct Ui {
     search: gtk::SearchEntry,
     status: gtk::Label,
     hint: gtk::Label,
-    scroller: gtk::ScrolledWindow,
-    grid: gio::ListStore,
+    scroller: gtk::Widget,
+    selection: gtk::Box,
+    selection_count: gtk::Label,
     view: View,
     items: Vec<CaptureRow>,
 }
@@ -61,7 +66,12 @@ thread_local! {
     static RECORD_BTN: RefCell<Option<gtk::Button>> = const { RefCell::new(None) };
     static PAUSE_BTN: RefCell<Option<gtk::Button>> = const { RefCell::new(None) };
     static CAM_BTN: RefCell<Option<gtk::Button>> = const { RefCell::new(None) };
+    /// Deleted but still undoable: hidden now, removed when their toast has gone.
+    static PENDING: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
+
+/// How long a toast with an Undo button stays.
+const UNDO_TOAST: std::time::Duration = std::time::Duration::from_millis(6000);
 
 fn ui() -> Option<Rc<RefCell<Ui>>> {
     UI.with(|u| u.borrow().clone())
@@ -145,7 +155,7 @@ pub fn reload() {
     let query = ui.borrow().search.text().to_string();
     if !prefs::get().history {
         ui.borrow_mut().items.clear();
-        crate::grid::fill(&ui.borrow().grid, &[]);
+        crate::grid::fill(&[]);
         ui.borrow().scroller.set_visible(false);
         ui.borrow().hint.set_visible(true);
         ui.borrow().hint.set_text("History is off. New shots still copy or save when you ask.");
@@ -153,9 +163,13 @@ pub fn reload() {
         return;
     }
     match store::open(&paths::library_db()).and_then(|db| db.list(view, query.trim(), 400)) {
-        Ok(items) => {
+        Ok(mut items) => {
+            PENDING.with(|p| {
+                let p = p.borrow();
+                items.retain(|r| !p.contains(&r.id));
+            });
             let empty = items.is_empty();
-            crate::grid::fill(&ui.borrow().grid, &items);
+            crate::grid::fill(&items);
             ui.borrow_mut().items = items;
             ui.borrow().scroller.set_visible(!empty);
             ui.borrow().hint.set_visible(empty);
@@ -336,6 +350,10 @@ fn refresh_status() {
     } else {
         format!("{count} captures")
     };
+    let selected = crate::grid::selected().len();
+    if selected > 0 {
+        text = format!("{text} · {selected} selected");
+    }
     if let Some(session) = record::active() {
         text = if session.paused { format!("Paused · {text}") } else { format!("Recording · {text}") };
     }
@@ -439,7 +457,7 @@ fn build(app: &gtk::Application) {
     hint.set_valign(gtk::Align::Start);
     hint.set_vexpand(true);
 
-    let (scroller, grid) = crate::grid::build();
+    let scroller = crate::grid::build();
 
     let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     toolbar.add_css_class("toolbar");
@@ -487,6 +505,22 @@ fn build(app: &gtk::Application) {
         refresh_cam_button();
     }
 
+    // What to do with the selection: how many, then the actions.
+    let selection = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    selection.set_visible(false);
+    selection.set_hexpand(true);
+    selection.set_halign(gtk::Align::End);
+    let selection_count = widgets::label("", "selection-chip");
+    selection_count.set_valign(gtk::Align::Center);
+    let delete = widgets::icon_button("user-trash-symbolic", "Delete the selected captures (Delete)");
+    delete.connect_clicked(|_| delete_later(crate::grid::selected()));
+    let deselect = widgets::icon_button("edit-clear-symbolic", "Clear the selection (Esc)");
+    deselect.connect_clicked(|_| crate::grid::clear_selection());
+    selection.append(&selection_count);
+    selection.append(&delete);
+    selection.append(&deselect);
+    toolbar.append(&selection);
+
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     content.add_css_class("settings-content");
     content.set_hexpand(true);
@@ -519,11 +553,16 @@ fn build(app: &gtk::Application) {
         status: status_label(),
         hint,
         scroller,
-        grid,
+        selection,
+        selection_count,
         view: View::Recent,
         items: Vec::new(),
     };
     UI.with(|slot| *slot.borrow_mut() = Some(Rc::new(RefCell::new(ui))));
+    window.connect_close_request(|_| {
+        flush_deletes();
+        glib::Propagation::Proceed
+    });
 
     let apply_width = {
         let nav = nav.clone();
@@ -1142,7 +1181,10 @@ pub fn item_menu(id: &str, parent: &gtk::Widget, x: f64, y: f64) {
     if row.kind == CaptureKind::Recording && nixe_capture_core::detect::present("ffmpeg") {
         menu.append(Some("Trim…"), Some("item.trim"));
     }
-    menu.append(Some("Delete…"), Some("item.delete"));
+    // A selected capture's Delete takes the whole selection along.
+    let doomed = if crate::grid::is_selected(id) { crate::grid::selected() } else { vec![row.id.clone()] };
+    let delete_label = if doomed.len() > 1 { format!("Delete {} captures", doomed.len()) } else { "Delete".into() };
+    menu.append(Some(&delete_label), Some("item.delete"));
     let group = gio::SimpleActionGroup::new();
     let act = |name: &str, f: Box<dyn Fn()>| {
         let a = gio::SimpleAction::new(name, None);
@@ -1162,8 +1204,7 @@ pub fn item_menu(id: &str, parent: &gtk::Widget, x: f64, y: f64) {
     act("export", Box::new(move || export_capture(&id, &name)));
     let r = row.clone();
     act("trim", Box::new(move || trim_capture(&r)));
-    let id = row.id.clone();
-    act("delete", Box::new(move || confirm_delete(&id)));
+    act("delete", Box::new(move || delete_later(doomed.clone())));
     let pop = gtk::PopoverMenu::from_model(Some(&menu));
     pop.insert_action_group("item", Some(&group));
     pop.set_parent(parent);
@@ -1292,40 +1333,76 @@ fn copy_capture(path: &std::path::Path) {
     );
 }
 
-fn confirm_delete(id: &str) {
-    let id = id.to_string();
-    let (dialog, card) = widgets::dialog("Delete this capture?", 420);
-    let note = widgets::label("The file and its notes leave this computer.", "dim");
-    note.set_wrap(true);
-    card.append(&note);
-    let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    buttons.set_halign(gtk::Align::End);
-    let cancel = gtk::Button::with_label("Not now");
-    let del = gtk::Button::with_label("Delete");
-    del.add_css_class("destructive-action");
-    buttons.append(&cancel);
-    buttons.append(&del);
-    card.append(&buttons);
-    let d = dialog.clone();
-    cancel.connect_clicked(move |_| d.close());
-    let d = dialog.clone();
-    del.connect_clicked(move |_| {
-        d.close();
-        let id = id.clone();
-        let id_ui = id.clone();
+/// Hide `ids` now and delete them when the Undo toast has gone.
+pub fn delete_later(ids: Vec<String>) {
+    if ids.is_empty() {
+        return;
+    }
+    PENDING.with(|p| p.borrow_mut().extend(ids.iter().cloned()));
+    crate::grid::clear_selection();
+    reload();
+    let message = if ids.len() == 1 { "Deleted the capture".to_string() } else { format!("Deleted {} captures", ids.len()) };
+    let batch = ids.clone();
+    toast_with_undo(&message, move || {
+        PENDING.with(|p| p.borrow_mut().retain(|id| !batch.contains(id)));
+        reload();
+    });
+    glib::timeout_add_local_once(UNDO_TOAST, move || {
+        // Whatever Undo didn't bring back.
+        let gone: Vec<String> = PENDING.with(|p| {
+            let mut p = p.borrow_mut();
+            let gone = ids.iter().filter(|id| p.contains(id)).cloned().collect();
+            p.retain(|id| !ids.contains(id));
+            gone
+        });
+        if gone.is_empty() {
+            return;
+        }
+        let ids_ui = gone.clone();
         crate::cmd::background(
-            move || store::open(&paths::library_db())?.delete(&id),
-            move |result| match result {
-                Ok(_) => {
-                    crate::grid::forget_thumb(&id_ui);
-                    reload();
-                    toast("Deleted");
+            move || delete_now(&gone),
+            move |result| {
+                for id in &ids_ui {
+                    crate::grid::forget_thumb(id);
                 }
-                Err(err) => toast(&err.to_string()),
+                if let Err(err) = result {
+                    toast(&err.to_string());
+                }
+                reload();
             },
         );
     });
-    dialog.present();
+}
+
+fn delete_now(ids: &[String]) -> anyhow::Result<()> {
+    let db = store::open(&paths::library_db())?;
+    for id in ids {
+        db.delete(id)?;
+    }
+    Ok(())
+}
+
+/// Delete what's still waiting on an Undo toast, before the window or app goes.
+pub fn flush_deletes() {
+    let gone = PENDING.with(|p| std::mem::take(&mut *p.borrow_mut()));
+    if gone.is_empty() {
+        return;
+    }
+    if let Err(err) = delete_now(&gone) {
+        eprintln!("nixe-capture: {err}");
+    }
+    for id in &gone {
+        crate::grid::forget_thumb(id);
+    }
+}
+
+/// The grid's selection changed: show what can be done with it.
+pub fn selection_changed() {
+    let Some(ui) = ui() else { return };
+    let n = crate::grid::selected().len();
+    ui.borrow().selection.set_visible(n > 0);
+    ui.borrow().selection_count.set_text(&format!("{n} selected"));
+    refresh_status();
 }
 
 fn report_capture(result: Result<action::Outcome, anyhow::Error>) {
@@ -1475,6 +1552,18 @@ fn install_keys(window: &gtk::ApplicationWindow, search: &gtk::SearchEntry) {
         if typing(win.upcast_ref()) {
             return glib::Propagation::Proceed;
         }
+        if ctrl && key == gdk::Key::a {
+            crate::grid::select_all();
+            return glib::Propagation::Stop;
+        }
+        if matches!(key, gdk::Key::Delete | gdk::Key::KP_Delete) && crate::grid::has_selection() {
+            delete_later(crate::grid::selected());
+            return glib::Propagation::Stop;
+        }
+        if key == gdk::Key::Escape && crate::grid::has_selection() {
+            crate::grid::clear_selection();
+            return glib::Propagation::Stop;
+        }
         glib::Propagation::Proceed
     });
     keys.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -1505,6 +1594,15 @@ pub fn show_shortcuts() {
 }
 
 pub fn toast(message: &str) {
+    show_toast(message, None);
+}
+
+/// A toast with an Undo button that runs `undo` and closes it.
+pub fn toast_with_undo(message: &str, undo: impl Fn() + 'static) {
+    show_toast(message, Some(Rc::new(undo)));
+}
+
+fn show_toast(message: &str, undo: Option<Rc<dyn Fn()>>) {
     let Some(ui) = ui() else {
         eprintln!("nixe-capture: {message}");
         return;
@@ -1524,10 +1622,25 @@ pub fn toast(message: &str) {
     bx.set_valign(gtk::Align::End);
     bx.set_margin_bottom(48);
     bx.append(&label);
+    // Only a toast with a button takes clicks; others let them through.
+    bx.set_can_target(undo.is_some());
+    let stay = if undo.is_some() { UNDO_TOAST } else { std::time::Duration::from_millis(3500) };
+    if let Some(run) = undo {
+        let b = gtk::Button::with_label("Undo");
+        b.add_css_class("toast-action");
+        let (o, t) = (overlay.clone(), bx.clone());
+        b.connect_clicked(move |_| {
+            run();
+            if t.parent().is_some() {
+                o.remove_overlay(&t);
+            }
+        });
+        bx.append(&b);
+    }
     overlay.add_overlay(&bx);
     TOAST.with(|t| *t.borrow_mut() = Some(bx.clone()));
     let overlay = overlay.clone();
-    glib::timeout_add_local_once(std::time::Duration::from_millis(3500), move || {
+    glib::timeout_add_local_once(stay, move || {
         if bx.parent().is_some() {
             overlay.remove_overlay(&bx);
         }

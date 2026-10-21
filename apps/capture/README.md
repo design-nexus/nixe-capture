@@ -37,7 +37,10 @@ in place of `install.sh`.
 
 ## History
 
-- Captures and recordings, searchable by their text and title; star the ones to keep.
+- Captures and recordings under day headings, searchable by their text and title; star
+  the ones to keep.
+- Ctrl+click or Shift+click selects several; Delete removes them, with Undo in the
+  message that follows. Files go only when that message has gone.
 - Unstarred screenshots older than the retention period (Settings → History) are removed
   on launch. Recordings are kept: they're in your Videos folder.
 - Shots taken from a key binding go into history too, their text read in the background.
@@ -101,6 +104,10 @@ o.bind("SUPER + SHIFT + O", "Capture text", "nixe-capture --ocr")
 | Ctrl+Shift+R | Record a region |
 | Ctrl+Alt+P | Pause or resume a recording |
 | Ctrl+F | Search history |
+| Ctrl+Click, Shift+Click | Select captures |
+| Ctrl+A | Select every capture shown |
+| Delete | Delete the selected captures |
+| Esc | Clear the selection |
 | Ctrl+B | Collapse the sidebar |
 | Ctrl+, | Settings |
 | F1 | Keyboard shortcuts |

@@ -184,6 +184,7 @@ impl Editor {
         style.set_icon_name("applications-graphics-symbolic");
         style.set_tooltip_text(Some("Colour and size"));
         style.add_css_class("flat");
+        style.set_valign(gtk::Align::Center);
         style.set_popover(Some(&style_pop));
 
         let undo = widgets::icon_button("edit-undo-symbolic", "Undo (Ctrl+Z)");
@@ -195,8 +196,29 @@ impl Editor {
         let ocr = widgets::icon_button("edit-find-symbolic", "Read text in the shot");
         let redact = widgets::icon_button("channel-secure-symbolic", "Redact emails, URLs, cards, and keys");
         let close = widgets::icon_button("window-close-symbolic", "Close (Esc)");
+        // Pin and Read text are used less; they share one button so the bar fits on one
+        // row in an 800 px window.
+        let more_box = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        more_box.set_margin_top(4);
+        more_box.set_margin_bottom(4);
+        more_box.set_margin_start(4);
+        more_box.set_margin_end(4);
+        more_box.append(&pin);
+        more_box.append(&ocr);
+        let more_pop = gtk::Popover::new();
+        more_pop.set_child(Some(&more_box));
+        for b in [&pin, &ocr] {
+            let pop = more_pop.clone();
+            b.connect_clicked(move |_| pop.popdown());
+        }
+        let more = gtk::MenuButton::new();
+        more.set_icon_name("view-more-symbolic");
+        more.set_tooltip_text(Some("Pin or read text"));
+        more.add_css_class("flat");
+        more.set_valign(gtk::Align::Center);
+        more.set_popover(Some(&more_pop));
 
-        let strip = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let strip = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         strip.add_css_class("editor-bar");
         strip.append(&tools);
         strip.append(&style);
@@ -204,9 +226,8 @@ impl Editor {
         strip.append(&redo);
         strip.append(&copy);
         strip.append(&save);
-        strip.append(&pin);
-        strip.append(&ocr);
         strip.append(&redact);
+        strip.append(&more);
         strip.append(&close);
 
         let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);

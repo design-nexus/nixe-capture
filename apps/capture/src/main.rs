@@ -176,6 +176,7 @@ fn main() -> glib::ExitCode {
         glib::ExitCode::SUCCESS
     });
     app.connect_shutdown(|_| {
+        window::flush_deletes();
         prefs::flush();
     });
     app.run()
