@@ -40,7 +40,9 @@ pub fn show(parent: &impl IsA<gtk::Window>, img: &RgbaImage, result: &OcrResult)
             }
             let _ = cr.restore();
         }
-        cr.set_source_rgba(0.35, 0.65, 1.0, 0.9);
+        // Text boxes in the theme's accent.
+        let accent = gtk::gdk::RGBA::parse(&crate::theme::palette().accent).unwrap_or(gtk::gdk::RGBA::BLUE);
+        cr.set_source_rgba(accent.red() as f64, accent.green() as f64, accent.blue() as f64, 0.9);
         cr.set_line_width(1.0);
         for line in &lines {
             cr.rectangle(ox + line.x as f64 * scale, oy + line.y as f64 * scale, line.w as f64 * scale, line.h as f64 * scale);

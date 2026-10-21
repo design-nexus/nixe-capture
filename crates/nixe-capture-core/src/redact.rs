@@ -1,4 +1,4 @@
-//! Local redaction: pixelate OCR lines that look like secrets.
+//! Local redaction: cover OCR lines that look like secrets with solid boxes.
 //! No network. Line boxes are used; engines do not expose word boxes here.
 
 use crate::annot::{Mark, NormRect};
@@ -19,7 +19,7 @@ pub enum Kind {
 pub fn marks(result: &OcrResult, width: u32, height: u32) -> Vec<Mark> {
     spans(result, width, height)
         .into_iter()
-        .map(|(rect, _)| Mark::Pixelate { rect, size: 12.0 })
+        .map(|(rect, _)| Mark::Fill { rect, colour: crate::annot::Colour::rgb(0.0, 0.0, 0.0) })
         .collect()
 }
 
@@ -128,7 +128,7 @@ mod tests {
         let r = result("write ken@example.com later");
         let marks = marks(&r, 400, 200);
         assert_eq!(marks.len(), 1);
-        assert!(matches!(marks[0], Mark::Pixelate { .. }));
+        assert!(matches!(marks[0], Mark::Fill { .. }));
         assert_eq!(classify("ken@example.com"), Some(Kind::Email));
     }
 

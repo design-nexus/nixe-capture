@@ -96,18 +96,33 @@ pub fn open(path: &Path) -> Result<Db> {
         std::fs::create_dir_all(dir)?;
     }
     let conn = Connection::open(path)?;
+    // Background writers (insert, OCR, star) share the file; wait for each other.
+    conn.busy_timeout(std::time::Duration::from_secs(3))?;
     conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
     let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version == 0 {
         conn.execute_batch(SCHEMA)?;
-        conn.execute_batch("PRAGMA user_version=1;")?;
+        conn.execute_batch("PRAGMA user_version=2;")?;
     }
     ensure_column(&conn, "captures", "sensitive", "INTEGER NOT NULL DEFAULT 0")?;
+    if version == 1 {
+        // The Pinned shelf is gone; what was pinned is starred, so retention keeps it.
+        conn.execute_batch("UPDATE captures SET starred=1 WHERE pinned=1; PRAGMA user_version=2;")?;
+    }
     Ok(Db { conn })
 }
 
+/// Read the library without changing it. A WAL database read-only needs its `-shm`
+/// file; when Capture isn't running and the folder can't be written (Glimpse's sandbox),
+/// it's opened as immutable instead.
 pub fn open_readonly(path: &Path) -> Result<Db> {
-    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI)?;
+    let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI;
+    let conn = Connection::open_with_flags(path, flags)
+        .and_then(|c| c.query_row("SELECT count(*) FROM captures", [], |_| Ok(())).map(|_| c))
+        .or_else(|_| {
+            let uri = format!("file:{}?immutable=1", path.to_string_lossy().replace('?', "%3f").replace('#', "%23"));
+            Connection::open_with_flags(uri, flags)
+        })?;
     conn.pragma_update(None, "query_only", true)?;
     Ok(Db { conn })
 }
@@ -138,6 +153,11 @@ impl Db {
             params![id, now, width, height, path.to_string_lossy(), source, hash],
         )?;
         Ok((id, path))
+    }
+
+    pub fn set_title(&self, id: &str, title: &str) -> Result<()> {
+        self.conn.execute("UPDATE captures SET title=?2 WHERE id=?1", params![id, title])?;
+        Ok(())
     }
 
     pub fn dhash(&self, id: &str) -> Result<Option<i64>> {
@@ -237,12 +257,34 @@ impl Db {
         self.conn
             .query_row(
                 "SELECT id, kind, created_at, width, height, path, starred, ocr_status, title, sensitive
-                 FROM captures WHERE path=?1 OR path LIKE '%/' || ?2 ORDER BY created_at DESC LIMIT 1",
-                params![as_str.as_ref(), name],
+                 FROM captures WHERE path=?1 OR path LIKE '%/' || ?2 ESCAPE '\\' ORDER BY created_at DESC LIMIT 1",
+                params![as_str.as_ref(), like_literal(name)],
                 row_from,
             )
             .optional()
             .map_err(Into::into)
+    }
+
+    /// Write `id`'s thumbnail to `dest` (from the picture with its marks burned in) and
+    /// record it, so deleting or pruning the capture removes it. `fresh` rewrites one
+    /// already there (after an edit).
+    pub fn thumb(&self, id: &str, src: &Path, dest: &Path, fresh: bool) -> Result<()> {
+        if fresh {
+            let _ = std::fs::remove_file(dest);
+        }
+        // A thumbnail from before the last edit (or from before thumbnails showed edits) is
+        // remade, so it never shows what an edit covered.
+        let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+        let stale = modified(&crate::annot::sidecar_path(src)).zip(modified(dest)).is_some_and(|(edit, thumb)| edit > thumb);
+        if dest.exists() && !stale {
+            return self.set_thumb(id, dest);
+        }
+        if crate::export::is_edited(src) {
+            write_thumb_image(&crate::export::flatten_png(src)?, dest, THUMB_EDGE)?;
+        } else {
+            write_thumb(src, dest, THUMB_EDGE)?;
+        }
+        self.set_thumb(id, dest)
     }
 
     pub fn set_thumb(&self, id: &str, path: &Path) -> Result<()> {
@@ -261,13 +303,16 @@ impl Db {
         Ok(unlink_capture(Path::new(&path), thumb.as_deref().map(Path::new)))
     }
 
-    /// Remove unstarred rows older than `days`. 0 keeps everything. Starred rows stay.
+    /// Remove unstarred screenshots older than `days`. 0 keeps everything. Starred rows
+    /// stay, and so do recordings: they're in the Videos folder, the person's own files.
     pub fn prune(&self, days: i64) -> Result<Vec<PathBuf>> {
         if days <= 0 {
             return Ok(Vec::new());
         }
         let cutoff = now_secs() - days * 86400;
-        let mut stmt = self.conn.prepare("SELECT id, path, thumb_path FROM captures WHERE starred=0 AND created_at < ?1")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, path, thumb_path FROM captures WHERE starred=0 AND kind='screenshot' AND created_at < ?1")?;
         let doomed: Vec<(String, String, Option<String>)> = stmt
             .query_map(params![cutoff], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
             .collect::<rusqlite::Result<_>>()?;
@@ -278,6 +323,22 @@ impl Db {
         }
         Ok(paths)
     }
+}
+
+/// A `LIKE` pattern matching `s` literally (`%`, `_` and `\` escaped with `\`).
+fn like_literal(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+}
+
+/// JPEG thumbnail of a picture already in memory.
+pub fn write_thumb_image(img: &image::DynamicImage, dest: &Path, edge: u32) -> Result<()> {
+    if let Some(dir) = dest.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let thumb = image::DynamicImage::ImageRgb8(img.thumbnail(edge, edge).to_rgb8());
+    let mut buf = Cursor::new(Vec::new());
+    thumb.write_to(&mut buf, image::ImageFormat::Jpeg)?;
+    crate::atomic_write(dest, &buf.into_inner())
 }
 
 /// JPEG thumbnail of `src` written to `dest`. Skips the write when `dest` already exists.
@@ -454,6 +515,46 @@ mod tests {
         assert!(!ocr_sidecar(&png).exists());
         db.set_ocr(&id, "tesseract", "ken@example.com").unwrap();
         assert_eq!(db.ocr_text(&id).unwrap().as_deref(), Some(""));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn path_lookup_takes_wildcards_literally() {
+        let dir = std::env::temp_dir().join(format!("nixe-capture-like-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = open(&dir.join("capture.sqlite")).unwrap();
+        let add = |name: &str| {
+            db.insert(&NewCapture { kind: CaptureKind::Screenshot, width: 1, height: 1, path: dir.join(name), source: "grim".into() })
+                .unwrap()
+        };
+        let plain = add("ab.png");
+        assert!(db.get_by_path(Path::new("/elsewhere/a_.png")).unwrap().is_none());
+        assert!(db.get_by_path(Path::new("/elsewhere/%.png")).unwrap().is_none());
+        assert_eq!(db.get_by_path(Path::new("/elsewhere/ab.png")).unwrap().unwrap().id, plain);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn thumbnails_are_recorded_and_deleted_and_show_marks() {
+        let dir = std::env::temp_dir().join(format!("nixe-capture-th-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let png = dir.join("s.png");
+        image::RgbaImage::from_pixel(40, 40, image::Rgba([255, 255, 255, 255])).save(&png).unwrap();
+        let mut st = crate::annot::EditState::default();
+        st.marks.push(crate::annot::Mark::Fill {
+            rect: crate::annot::NormRect::new(0.0, 0.0, 1.0, 1.0),
+            colour: crate::annot::Colour::rgb(0.0, 0.0, 0.0),
+        });
+        st.save(&crate::annot::sidecar_path(&png)).unwrap();
+        let db = open(&dir.join("capture.sqlite")).unwrap();
+        let id = db.insert(&NewCapture { kind: CaptureKind::Screenshot, width: 40, height: 40, path: png.clone(), source: "grim".into() }).unwrap();
+        let thumb = dir.join("thumbs").join(format!("{id}.jpg"));
+        db.thumb(&id, &png, &thumb, false).unwrap();
+        // The thumbnail is the redacted picture (black), not the original (white).
+        assert!(image::open(&thumb).unwrap().to_luma8().get_pixel(5, 5)[0] < 40);
+        assert_eq!(crate::export::shareable(&png).unwrap().to_luma8().get_pixel(5, 5)[0], 0);
+        assert!(db.delete(&id).unwrap().contains(&thumb));
+        assert!(!thumb.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

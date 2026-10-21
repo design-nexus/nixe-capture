@@ -12,8 +12,8 @@ use anyhow::Result;
 use image::DynamicImage;
 
 pub use quality::{Band, TessQuality, needs_fallback, score_rapid, score_tesseract};
-pub use rapidocr::{RapidOcr, models_present};
-pub use tesseract::Tesseract;
+pub use rapidocr::{RapidOcr, download_models, models_present};
+pub use tesseract::{Tesseract, languages as tesseract_languages};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OcrMode {

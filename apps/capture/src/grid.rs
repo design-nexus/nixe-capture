@@ -179,8 +179,13 @@ fn fill_picture(picture: &gtk::Picture, id: &str, path: &std::path::Path) {
     let src = path.to_path_buf();
     let dest = paths::thumb_file(&id);
     crate::cmd::background(
+        // Through the library, so an edited shot's thumbnail shows its edits (and its
+        // redaction) and is recorded for deletion.
         move || {
-            store::write_thumb(&src, &dest, THUMB_EDGE)?;
+            match store::open(&paths::library_db()) {
+                Ok(db) => db.thumb(&id, &src, &dest, false)?,
+                Err(_) => store::write_thumb(&src, &dest, THUMB_EDGE)?,
+            }
             anyhow::Ok((id, dest))
         },
         move |result| {
@@ -193,10 +198,15 @@ fn fill_picture(picture: &gtk::Picture, id: &str, path: &std::path::Path) {
 }
 
 pub fn forget_thumb(id: &str) {
+    drop_texture(id);
+    let _ = std::fs::remove_file(paths::thumb_file(id));
+}
+
+/// Forget the loaded texture only, so the grid reads the (new) file again.
+pub fn drop_texture(id: &str) {
     TEXTURES.with(|c| {
         let mut cache = c.borrow_mut();
         cache.map.remove(id);
         cache.order.retain(|k| k != id);
     });
-    let _ = std::fs::remove_file(paths::thumb_file(id));
 }

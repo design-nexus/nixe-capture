@@ -43,6 +43,13 @@ pub fn open_rgba(img: RgbaImage) {
     window.add_css_class("capture-window");
     window.add_css_class("capture-pin");
     window.set_resizable(true);
+    // Not an application window (see above), so hold the app ourselves: closing the
+    // history window or the editor mustn't take the pins with it.
+    let hold = std::cell::RefCell::new(gtk::gio::Application::default().map(|a| a.hold()));
+    window.connect_close_request(move |_| {
+        hold.borrow_mut().take();
+        glib::Propagation::Proceed
+    });
 
     let picture = gtk::Picture::for_paintable(&texture);
     picture.set_hexpand(true);
@@ -137,12 +144,27 @@ fn hypr_pin_latest() {
     let Some(client) = list.iter().filter(|c| c.title == TITLE && !c.pinned).min_by_key(|c| c.focus_history_id) else {
         return;
     };
-    let addr = &client.address;
-    let lua = format!(
-        r#"pcall(function() hl.dispatch(hl.dsp.pin({{ window = "{addr}" }})) end); pcall(function() hl.dispatch("pin", "address:{addr}") end)"#
-    );
-    let _ = std::process::Command::new("hyprctl").args(["eval", &lua]).status();
-    let _ = std::process::Command::new("hyprctl").args(["dispatch", "pin", &format!("address:{addr}")]).status();
+    let addr = client.address.clone();
+    // Pin is a toggle: try each way until one has pinned it, and no more after that.
+    let pinned = || {
+        std::process::Command::new("hyprctl")
+            .args(["clients", "-j"])
+            .output()
+            .ok()
+            .and_then(|o| serde_json::from_slice::<Vec<HyprClient>>(&o.stdout).ok())
+            .is_some_and(|list| list.iter().any(|c| c.address == addr && c.pinned))
+    };
+    let attempts = [
+        vec!["eval".to_string(), format!(r#"hl.dispatch(hl.dsp.pin({{ window = "{addr}" }}))"#)],
+        vec!["eval".to_string(), format!(r#"hl.dispatch("pin", "address:{addr}")"#)],
+        vec!["dispatch".to_string(), "pin".to_string(), format!("address:{addr}")],
+    ];
+    for args in attempts {
+        let _ = std::process::Command::new("hyprctl").args(&args).status();
+        if pinned() {
+            return;
+        }
+    }
 }
 
 #[derive(serde::Deserialize)]

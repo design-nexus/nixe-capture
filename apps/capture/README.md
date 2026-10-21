@@ -1,29 +1,88 @@
-# Nixe Capture
+# Capture
 
-Screenshots, annotation, OCR, and screen recording for Omarchy / Hyprland.
+Screenshots, annotation, OCR and screen recording for Omarchy and Hyprland, with a
+searchable history.
 
-```
-nixe-capture                 # history window
-nixe-capture --region        # drag a region, copy the PNG
-nixe-capture --window
-nixe-capture --active-window
-nixe-capture --fullscreen
-nixe-capture --ocr           # region, then copy text
-nixe-capture --pin           # region, then pin
-nixe-capture --region --edit # region, then the annotation editor
-nixe-capture --copy|--save [PATH]
-nixe-capture --record        # focused monitor; --region to pick; --stop / --pause / --webcam
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/design-nexus/nixe/main/install.sh | bash -s -- capture
 ```
 
-Needs `grim`. Region pick uses a GTK layer-shell overlay (magnifier, dimensions, window snap) and falls back to `slurp` when layer-shell is missing. After a shot, the annotation editor copies a flattened PNG and leaves the original file unchanged.
+This installs grim, wl-clipboard, Tesseract (with English) and gtk4-layer-shell if they're
+missing, builds with Cargo, and installs `nixe-capture` and its Glimpse plugin to
+`~/.local/bin` with a launcher entry. To remove it, run the same line with `uninstall.sh`
+in place of `install.sh`.
 
-OCR defaults to Tesseract. Automatic mode falls back to RapidOCR when Tesseract's quality band is poor or empty. RapidOCR models load on first fallback, never at startup.
+## Capturing
 
-Recording wraps `gpu-screen-recorder`, then `wf-recorder`, then `wl-screenrec`, then `gst-launch-1.0` after the XDG ScreenCast portal. Settings only show those rows when a recorder is on PATH. Ctrl+R starts or stops; Ctrl+Shift+R records a region; Ctrl+Shift+P pauses on gpu-screen-recorder. Webcam overlay is mpv with Omarchy `WebcamOverlay` window rules. History can trim a recording with ffmpeg.
+- **Region** drags on a frozen still of the screen, with a magnifier, the size, and snapping
+  to windows on screen. **Window** picks a window; **Screen** takes the focused monitor.
+  Without layer-shell, slurp picks the region.
+- After a shot: open it in the editor (the default), copy it, save it, read its text, or pin
+  it. Settings → Capture picks which, and the Save folder.
+- **Scrolling capture** of a long region, through omasnap.
+- Each shot is titled with the window that was focused, for history and Glimpse.
 
-`nixe-capture-glimpse` searches history OCR (copy text) and the commands `capture region`, `capture window`, and `capture screen`. Glimpse launches `nixe-capture --region` (or `--window` / `--fullscreen`) on the host; the plugin cannot spawn GTK. The plugin still copies that CLI if an older Glimpse handles activate.
+## Editing
 
-Suggested Omarchy/Hyprland binds (keep them in your hypr config; install does not write them):
+- Arrow, line, rectangle, ellipse, freehand, highlighter, text and numbered markers in the
+  theme's colours; blur, pixelate and a solid box for hiding things; crop.
+- Select and move a mark, or Delete it. Ctrl+scroll zooms; Ctrl+0 fits.
+- **Redact** reads the shot's text and covers emails, URLs, phone numbers, card numbers,
+  addresses and keys with solid boxes; the shot is then marked sensitive (its text isn't
+  indexed and Nixe Assistant isn't given it).
+- The original file is never changed: edits are kept beside it. Everything handed out
+  (copy, save, pin, the history thumbnail, Nixe Assistant) has the edits burned in.
+
+## History
+
+- Captures and recordings, searchable by their text and title; star the ones to keep.
+- Unstarred screenshots older than the retention period (Settings → History) are removed
+  on launch. Recordings are kept: they're in your Videos folder.
+- Shots taken from a key binding go into history too, their text read in the background.
+- With history off, nothing is kept beyond what you save.
+
+## Text
+
+Tesseract reads the text (Settings → OCR → Language, for any language with
+`tesseract-data-*` installed). Automatic mode tries RapidOCR on text Tesseract reads poorly,
+once its models are downloaded (Settings → OCR → RapidOCR models).
+
+## Recording
+
+- gpu-screen-recorder, wf-recorder, wl-screenrec, or PipeWire through the ScreenCast portal,
+  whichever is installed, in that order. Settings shows only the rows that apply.
+- The focused monitor or a dragged region; system sound, the mic, or both
+  (wf-recorder and wl-screenrec record one of them: system sound first).
+- MP4, WebM or GIF (converted with ffmpeg); an optional countdown; the pointer on or off.
+- While recording, a bar at the top of the screen shows the time and has pause (with
+  gpu-screen-recorder) and stop.
+- A picture-in-picture webcam overlay through mpv and Omarchy's `WebcamOverlay` rules.
+- Recordings are saved to your Videos folder. History can trim one with ffmpeg.
+
+## Usage
+
+```
+nixe-capture                    History window
+nixe-capture --region           Drag a region, copy the PNG
+nixe-capture --window           Pick a window
+nixe-capture --active-window    The focused window
+nixe-capture --monitor [NAME]   One monitor (the focused one without NAME)
+nixe-capture --fullscreen       The focused monitor
+nixe-capture --delay SECS       Wait first
+nixe-capture --ocr              Region, then copy its text
+nixe-capture --pin              Region, then pin it
+nixe-capture --edit             Region, then the editor
+nixe-capture --copy | --save [PATH]
+nixe-capture --scroll           Scrolling capture (omasnap)
+nixe-capture --record [--region] [--webcam]
+nixe-capture --record --stop | --pause
+nixe-capture --section ID       Open Recent, Starred, or settings
+nixe-capture --toggle           Close the window if it's open, otherwise open it
+```
+
+Suggested Hyprland binds (install doesn't write them):
 
 ```lua
 o.bind("SUPER + SHIFT + S", "Capture region", "nixe-capture --region")
@@ -32,4 +91,35 @@ o.bind("PRINT", "Capture screen", "nixe-capture --fullscreen")
 o.bind("SUPER + SHIFT + O", "Capture text", "nixe-capture --ocr")
 ```
 
-See [PLAN.md](PLAN.md).
+| Key | Action |
+| --- | --- |
+| Ctrl+N | Capture a region |
+| Ctrl+Shift+N | Capture a window |
+| Ctrl+Shift+F | Capture the focused monitor |
+| Ctrl+Shift+L | Scrolling capture |
+| Ctrl+R | Start or stop a recording |
+| Ctrl+Shift+R | Record a region |
+| Ctrl+Alt+P | Pause or resume a recording |
+| Ctrl+F | Search history |
+| Ctrl+B | Collapse the sidebar |
+| Ctrl+, | Settings |
+| F1 | Keyboard shortcuts |
+| Ctrl+Q | Close |
+
+In the editor: V select, A arrow, L line, R rectangle, E ellipse, P freehand,
+H highlighter, T text, N marker, B blur, X pixelate, D solid box, C crop; Delete removes the
+selected mark; Ctrl+Z / Ctrl+Shift+Z undo and redo; Ctrl+C copies; Ctrl+S saves; F1 lists
+them.
+
+## Glimpse and Nixe Assistant
+
+`nixe-capture-glimpse` searches history text (and copies it) and runs `capture region`,
+`capture window` and `capture screen`. Nixe Assistant can take a capture, search history,
+read a capture's text and control recording over the session bus (sending it a screenshot
+is off until Settings → Privacy allows it).
+
+## Files
+
+- History: `~/.local/share/nixe-capture/` (`capture.sqlite` and the captures)
+- Thumbnails: `~/.cache/nixe-capture/thumbs/`
+- Settings: `~/.config/nixe-capture/settings.toml`

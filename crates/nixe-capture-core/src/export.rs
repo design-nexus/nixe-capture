@@ -26,6 +26,30 @@ pub fn write_flat(src: &Path, dest: &Path) -> Result<()> {
     write_png(&flatten_png(src)?, dest)
 }
 
+/// True when `path` has annotation marks or a crop beside it.
+pub fn is_edited(path: &Path) -> bool {
+    crate::annot::EditState::load(&crate::annot::sidecar_path(path)).is_ok_and(|s| s.is_edited())
+}
+
+/// The picture to hand out (copy, pin, thumbnail, Nixe Assistant): with its marks burned
+/// in, so a redaction is never left behind in what leaves the editor.
+pub fn shareable(path: &Path) -> Result<DynamicImage> {
+    if is_edited(path) {
+        flatten_png(path)
+    } else {
+        image::open(path).with_context(|| format!("open {}", path.display()))
+    }
+}
+
+/// [`shareable`] as PNG bytes; the file as it is when there's nothing to burn in.
+pub fn shareable_png(path: &Path) -> Result<Vec<u8>> {
+    if is_edited(path) {
+        png_bytes(&flatten_png(path)?)
+    } else {
+        std::fs::read(path).with_context(|| format!("read {}", path.display()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

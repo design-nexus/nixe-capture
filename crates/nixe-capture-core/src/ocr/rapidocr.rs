@@ -39,6 +39,12 @@ impl OcrEngine for RapidOcr {
     }
 }
 
+/// Fetch RapidOCR's models into its cache (when the person asks, from Settings).
+pub fn download_models() -> Result<()> {
+    ModelCache::new(cache_dir()).ensure_ppocrv6_small(ModelDownloadMode::Missing).context("RapidOCR models")?;
+    Ok(())
+}
+
 pub fn models_present() -> bool {
     ModelCache::new(cache_dir()).missing_assets(&PPOCRV6_SMALL).is_empty()
 }

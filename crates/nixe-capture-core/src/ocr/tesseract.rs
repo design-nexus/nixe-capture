@@ -33,8 +33,22 @@ impl OcrEngine for Tesseract {
     }
 }
 
+/// The languages Tesseract has data for (`tesseract --list-langs`), without `osd`
+/// (orientation detection, not a language).
+pub fn languages() -> Vec<String> {
+    let Ok(out) = std::process::Command::new("tesseract").arg("--list-langs").output() else { return Vec::new() };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .skip(1)
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && *l != "osd")
+        .map(str::to_string)
+        .collect()
+}
+
 struct LineAcc {
-    num: i32,
+    /// (block, paragraph, line): line numbers restart in each block and paragraph.
+    num: (i32, i32, i32),
     x: i32,
     y: i32,
     w: i32,
@@ -54,7 +68,8 @@ fn parse_tsv(tsv: &str) -> OcrResult {
         if level != 5 {
             continue;
         }
-        let line_num: i32 = cols[4].parse().unwrap_or(0);
+        let num = |i: usize| cols[i].parse::<i32>().unwrap_or(0);
+        let line_num = (num(2), num(3), num(4));
         let left: i32 = cols[6].parse().unwrap_or(0);
         let top: i32 = cols[7].parse().unwrap_or(0);
         let width: i32 = cols[8].parse().unwrap_or(0);
@@ -101,5 +116,16 @@ mod tests {
         assert_eq!(r.lines[1].text, "Settings");
         assert_eq!(r.text, "Hello world\nSettings");
         assert!((r.lines[0].conf - 89.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn first_lines_of_two_blocks_stay_apart() {
+        let tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n\
+5\t1\t1\t1\t1\t1\t10\t10\t40\t12\t90\tName\n\
+5\t1\t2\t1\t1\t1\t300\t10\t40\t12\t90\tPassword\n";
+        let r = parse_tsv(tsv);
+        assert_eq!(r.lines.len(), 2);
+        assert_eq!(r.lines[1].text, "Password");
+        assert_eq!(r.lines[1].x, 300);
     }
 }

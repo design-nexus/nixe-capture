@@ -135,13 +135,13 @@ Capability flags hide unsupported settings. The GTK app never offers a control w
 | `overlay.rs` | Fullscreen still overlay, region/window pick, magnifier, dimensions, keys. |
 | `editor.rs` | Annotation canvas + tool strip. Photos editor flow, Capture tools added. |
 | `pin.rs` | Floating always-on-top reference windows. |
-| `history.rs` | Grid, filter, reopen, copy, export, delete. |
+| `grid.rs` | History grid (virtualized `GridView`) and thumbnails; the window holds filter, reopen, copy, export, delete. |
 | `ocr_view.rs` | Overlay of recognized lines; copy text. |
 | `settings_dialog.rs` | Shared settings card. |
 | `control.rs` | Assistant tools while the app is open. |
 | `prefs.rs` | `prefs_store!`. |
 | `paths.rs`, `cmd.rs`, `theme.rs`, `widgets.rs` | Re-exports plus app-only bits. |
-| `worker.rs` | Tokio or `gio::spawn_blocking` for OCR, thumbnails, encode. GTK never waits. |
+| `cmd.rs` (`background`) | Worker threads for OCR, thumbnails, encode, slurp. GTK never waits. |
 
 Cold-start path: `nixe-capture --region` builds the overlay only. History window, RapidOCR, and SQLite open after the shot is accepted (or never, if history is off and the user copies then quits).
 
@@ -300,7 +300,7 @@ CREATE TABLE captures (
   sensitive INTEGER NOT NULL DEFAULT 0,
   source TEXT,                 -- grim | portal | ...
   ocr_engine TEXT,
-  ocr_status TEXT              -- pending | done | skipped | failed
+  ocr_status TEXT              -- pending | done
 );
 CREATE VIRTUAL TABLE captures_fts USING fts5(
   ocr, title,
@@ -455,7 +455,7 @@ gpu-screen-recorder / wf-recorder / wl-screenrec / portal+PipeWire. System audio
 
 Assistant send-screenshot (authorization switch, like News `assistant_can_subscribe`). Intelligent redaction. Glimpse semantic search (Glimpse already has embeddings). Tutorial capture. Scrolling capture only if a backend exists (omasnap scroll today). Drive sharing when Drive exists. No cloud in core.
 
-Landed on this machine: `assistant_can_send` (default off) gates `capture.send_screenshot`. Editor Redact pixelates OCR line boxes (email/URL/phone/Luhn card/IPv4/`sk_|pk_|ghp_|github_pat_`) and marks the row sensitive, which drops FTS OCR and the `.ocr.txt` sidecar. Glimpse reader extracts stored OCR for PNGs and skips sensitive shots. `nixe-capture --scroll` wraps `omasnap --scroll --save`. Tutorial is a first-run dialog. Drive is skipped — no Drive app. Assistant’s grim ability is unchanged.
+Landed on this machine: `assistant_can_send` (default off) gates `capture.send_screenshot`. Editor Redact covers OCR line boxes with solid boxes (email/URL/phone/Luhn card/IPv4/`sk_|pk_|ghp_|github_pat_`) and marks the row sensitive, which drops FTS OCR and the `.ocr.txt` sidecar. Glimpse reader extracts stored OCR for PNGs and skips sensitive shots. `nixe-capture --scroll` wraps `omasnap --scroll --save`. Tutorial is a first-run dialog. Drive is skipped — no Drive app. Assistant’s grim ability is unchanged.
 
 ---
 

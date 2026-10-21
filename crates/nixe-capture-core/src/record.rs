@@ -240,12 +240,35 @@ fn wf_argv(req: &RecordRequest, path: &Path) -> Result<Vec<String>> {
         }
         Target::Portal => {}
     }
+    // One device: the desktop's sound (the default output's monitor) wins over the mic.
     if req.desktop_audio || req.microphone {
-        a.push("--audio".into());
+        // Without pactl to name a device, wf-recorder records the default source.
+        a.push(match audio_device(req.desktop_audio, req.microphone) {
+            Some(device) => format!("--audio={device}"),
+            None => "--audio".into(),
+        });
     }
     a.push("-f".into());
     a.push(path.to_string_lossy().into_owned());
     Ok(a)
+}
+
+/// The PulseAudio/PipeWire source to record: the default sink's monitor for desktop
+/// sound, the default source for the mic. None when neither is wanted (or found).
+fn audio_device(desktop: bool, mic: bool) -> Option<String> {
+    let pactl = |what: &str| {
+        Command::new("pactl").arg(what).output().ok().filter(|o| o.status.success()).and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            (!s.is_empty()).then_some(s)
+        })
+    };
+    if desktop {
+        pactl("get-default-sink").map(|sink| format!("{sink}.monitor"))
+    } else if mic {
+        pactl("get-default-source")
+    } else {
+        None
+    }
 }
 
 fn wl_argv(req: &RecordRequest, path: &Path) -> Result<Vec<String>> {
@@ -259,13 +282,18 @@ fn wl_argv(req: &RecordRequest, path: &Path) -> Result<Vec<String>> {
             a.push(name.clone());
         }
         Target::Region(r) => {
+            // slurp's "X,Y WxH", as wf-recorder takes.
             a.push("-g".into());
-            a.push(format!("{}x{}+{}+{}", r.w, r.h, r.x, r.y));
+            a.push(format!("{},{} {}x{}", r.x, r.y, r.w, r.h));
         }
         Target::Portal => {}
     }
     if req.desktop_audio || req.microphone {
         a.push("--audio".into());
+        if let Some(device) = audio_device(req.desktop_audio, req.microphone) {
+            a.push("--audio-device".into());
+            a.push(device);
+        }
     }
     a.push("-f".into());
     a.push(path.to_string_lossy().into_owned());
@@ -335,8 +363,14 @@ fn try_start(backend: Backend, req: &RecordRequest, gif: bool) -> Result<Session
 
 pub fn stop() -> Result<Option<PathBuf>> {
     let Some(session) = read_session() else { return Ok(None) };
+    if !ours(&session) {
+        // The recorder is gone and its pid may be someone else's now: signal nothing.
+        clear_session();
+        return Ok(session.path.is_file().then_some(session.path));
+    }
     let _ = signal(session.pid, "-INT");
-    let deadline = Instant::now() + Duration::from_secs(5);
+    // A software encoder can take a while to write out the end of a long recording.
+    let deadline = Instant::now() + Duration::from_secs(30);
     while Instant::now() < deadline && alive(session.pid) {
         std::thread::sleep(Duration::from_millis(100));
     }
@@ -365,6 +399,10 @@ pub fn toggle_pause() -> Result<bool> {
     if session.backend != Backend::GpuScreenRecorder.id() {
         bail!("pause needs gpu-screen-recorder");
     }
+    if !ours(&session) {
+        clear_session();
+        bail!("not recording");
+    }
     signal(session.pid, "-USR2")?;
     session.paused = !session.paused;
     write_session(&session)?;
@@ -374,12 +412,37 @@ pub fn toggle_pause() -> Result<bool> {
 pub fn active() -> Option<Session> {
     reap();
     let session = read_session()?;
-    if alive(session.pid) {
+    if ours(&session) {
         Some(session)
     } else {
         clear_session();
         None
     }
+}
+
+/// The last session's file when its recorder ended by itself (it crashed, or was killed),
+/// so it can still go into history. Clears the session.
+pub fn ended() -> Option<PathBuf> {
+    let session = read_session()?;
+    if ours(&session) {
+        return None;
+    }
+    clear_session();
+    session.path.is_file().then_some(session.path)
+}
+
+/// True when the session's pid is alive and is its recorder (not a reused pid).
+fn ours(session: &Session) -> bool {
+    alive(session.pid) && runs(session.pid, &session.backend)
+}
+
+/// Whether `pid` is the program behind `backend` (by `/proc/<pid>/comm`, which keeps 15
+/// characters). True when /proc can't tell.
+fn runs(pid: u32, backend: &str) -> bool {
+    let Ok(comm) = fs::read_to_string(format!("/proc/{pid}/comm")) else { return true };
+    let program = if backend == Backend::GstPortal.id() { "gst-launch-1.0" } else { backend };
+    let short: String = program.chars().take(15).collect();
+    comm.trim() == short
 }
 
 fn reap() {
@@ -413,7 +476,9 @@ pub fn trim(src: &Path, dest: &Path, start: f64, end: Option<f64>) -> Result<()>
 }
 
 fn trim_lead(path: &Path, secs: f64) -> Result<()> {
-    let tmp = path.with_extension("trim.mp4");
+    // The copy keeps the file's own container.
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("mp4");
+    let tmp = path.with_extension(format!("trim.{ext}"));
     let mut cmd = Command::new("ffmpeg");
     cmd.args(["-v", "error", "-nostdin", "-y", "-ss", &format!("{secs:.3}"), "-i"]).arg(path).args(["-c", "copy"]).arg(&tmp);
     if cmd.status()?.success() {
@@ -783,7 +848,7 @@ mod tests {
         let args = wf_argv(&r, Path::new("/tmp/rec.mp4")).unwrap();
         assert!(args.contains(&"-g".into()));
         assert!(args.contains(&"10,20 300x200".into()));
-        assert!(args.contains(&"--audio".into()));
+        assert!(args.iter().any(|a| a.starts_with("--audio")));
     }
 
     #[test]
@@ -810,6 +875,15 @@ mod tests {
     fn session_path_is_under_runtime() {
         let p = session_path();
         assert_eq!(p.file_name().unwrap(), "recording.json");
+    }
+
+    #[test]
+    fn recorder_pids_are_checked_by_program() {
+        let me = std::process::id();
+        // This test binary isn't a screen recorder.
+        assert!(!runs(me, "wf-recorder"));
+        let comm = std::fs::read_to_string(format!("/proc/{me}/comm")).unwrap();
+        assert!(runs(me, comm.trim()));
     }
 
     #[test]

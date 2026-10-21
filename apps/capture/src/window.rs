@@ -30,7 +30,7 @@ pub const SHORTCUTS: &[(&[&str], &str)] = &[
     (&["Ctrl", "Shift", "F"], "Capture the focused monitor"),
     (&["Ctrl", "R"], "Start or stop a recording"),
     (&["Ctrl", "Shift", "R"], "Record a region"),
-    (&["Ctrl", "Shift", "P"], "Pause or resume a recording"),
+    (&["Ctrl", "Alt", "P"], "Pause or resume a recording"),
     (&["Ctrl", "F"], "Search history"),
     (&["Ctrl", "B"], "Collapse or expand sidebar"),
     (&["Ctrl", ","], "Settings"),
@@ -191,7 +191,16 @@ pub fn send_screenshot(id: &str) -> Result<Value, String> {
         return Err("that capture is marked sensitive".into());
     }
     let text = db.ocr_text(id).map_err(|e| e.to_string())?.unwrap_or_default();
-    Ok(json!({"id": id, "text": text, "path": row.path.display().to_string()}))
+    // An edited shot goes out as edited (its blurs and boxes burned in), never the original.
+    let path = if nixe_capture_core::export::is_edited(&row.path) {
+        let out = paths::thumbs_dir().with_file_name("shared").join(format!("{id}.png"));
+        std::fs::create_dir_all(out.parent().unwrap_or(&out)).map_err(|e| e.to_string())?;
+        nixe_capture_core::export::write_flat(&row.path, &out).map_err(|e| e.to_string())?;
+        out
+    } else {
+        row.path.clone()
+    };
+    Ok(json!({"id": id, "text": text, "path": path.display().to_string()}))
 }
 
 pub fn start_scroll() {
@@ -204,7 +213,12 @@ pub fn start_scroll() {
         return;
     }
     toast("Scroll the region in omasnap");
-    let dir = paths::captures_dir();
+    // With history off, the shot goes where saved screenshots go, not the history folder.
+    let dir = if prefs::get().history {
+        paths::captures_dir()
+    } else {
+        nixe_capture_core::action::default_save_path().parent().map(PathBuf::from).unwrap_or_else(paths::captures_dir)
+    };
     crate::cmd::background(
         move || nixe_capture_core::scroll::capture(&dir),
         |result| match result {
@@ -228,7 +242,7 @@ fn ingest_scroll(path: PathBuf) {
                     path: path.clone(),
                     source: "omasnap".into(),
                 })?;
-                let _ = store::write_thumb(&path, &paths::thumb_file(&id), store::THUMB_EDGE);
+                let _ = db.thumb(&id, &path, &paths::thumb_file(&id), false);
                 Some(id)
             } else {
                 None
@@ -454,7 +468,7 @@ fn build(app: &gtk::Application) {
         rec.connect_clicked(|_| toggle_record(false));
         RECORD_BTN.with(|b| *b.borrow_mut() = Some(rec.clone()));
         toolbar.append(&rec);
-        let pause = widgets::icon_button("media-playback-pause-symbolic", "Pause recording (Ctrl+Shift+P)");
+        let pause = widgets::icon_button("media-playback-pause-symbolic", "Pause recording (Ctrl+Alt+P)");
         pause.set_visible(false);
         pause.connect_clicked(|_| pause_recording());
         PAUSE_BTN.with(|b| *b.borrow_mut() = Some(pause.clone()));
@@ -546,14 +560,33 @@ pub fn capture_now(mode: CaptureMode) {
     capture_with(mode, after_from_prefs(), 0);
 }
 
+thread_local! {
+    /// The window that was focused when the last capture began: the shot's title.
+    static LAST_TITLE: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+/// The title for the capture being taken (see `LAST_TITLE`).
+pub fn capture_title() -> String {
+    LAST_TITLE.with(|t| t.borrow().clone())
+}
+
 pub fn capture_with(mode: CaptureMode, after: After, delay: u32) {
+    capture_with_path(mode, after, delay, None);
+}
+
+/// [`capture_with`], saving to `save_path` (from `--save PATH`) instead of the Save folder.
+pub fn capture_with_path(mode: CaptureMode, after: After, delay: u32, save_path: Option<PathBuf>) {
+    let title = nixe_capture_core::select::capture_title();
+    LAST_TITLE.with(|t| *t.borrow_mut() = title);
     let win = window();
+    // Hyprland doesn't minimize; hide the window so it isn't in its own shot (the
+    // capture waits 250 ms for it to unmap).
     if let Some(w) = &win {
-        w.minimize();
+        w.set_visible(false);
     }
     let langs = prefs::get().ocr_langs;
     let ocr_mode = OcrMode::parse(&prefs::get().ocr_mode);
-    let save_path = save_file();
+    let save_path = save_path.or_else(save_file);
     let restore = {
         let win = win.clone();
         Rc::new(move || {
@@ -746,11 +779,13 @@ fn remember(shot: &nixe_capture_core::capture::Shot) {
     let ocr_on = prefs::get().ocr_on_capture;
     let langs = prefs::get().ocr_langs;
     let mode = OcrMode::parse(&prefs::get().ocr_mode);
+    let title = capture_title();
     crate::cmd::background(
         move || {
             let db = store::open(&paths::library_db())?;
             let (id, path) = db.insert_png(&paths::captures_dir(), &png, w, h, "grim")?;
-            let _ = store::write_thumb(&path, &paths::thumb_file(&id), store::THUMB_EDGE);
+            let _ = db.set_title(&id, &title);
+            let _ = db.thumb(&id, &path, &paths::thumb_file(&id), false);
             if ocr_on && let Ok(r) = recognize(&image, mode, &langs) {
                 let _ = db.set_ocr(&id, &r.engine, &r.text);
             }
@@ -775,10 +810,10 @@ fn prune_history() {
         },
         |result| match result {
             Ok(gone) if !gone.is_empty() => {
-                for p in &gone {
-                    if p.extension().is_some_and(|e| e == "png")
-                        && let Some(id) = p.file_stem()
-                    {
+                // Thumbnails are named after the capture's id.
+                let thumbs = paths::thumbs_dir();
+                for p in gone.iter().filter(|p| p.parent() == Some(thumbs.as_path())) {
+                    if let Some(id) = p.file_stem() {
                         crate::grid::forget_thumb(&id.to_string_lossy());
                     }
                 }
@@ -816,6 +851,7 @@ pub fn start_recording(region: bool) {
 }
 
 pub fn stop_recording() {
+    crate::overlay::hide_recording_pill();
     crate::cmd::background(record::stop, |result| match result {
         Ok(Some(path)) => {
             remember_recording(&path);
@@ -856,7 +892,8 @@ fn begin_record(region: bool) {
         }
         return;
     }
-    launch_record(record_target(region));
+    // slurp waits for the person to drag: not on the GTK thread.
+    crate::cmd::background(move || record_target(region), launch_record);
 }
 
 fn record_target(region: bool) -> Target {
@@ -889,10 +926,11 @@ fn record_request(target: Target, output: PathBuf) -> RecordRequest {
     }
 }
 
+/// Recordings go to the Videos folder (history lists them there); they're the person's
+/// files, so history retention never deletes them.
 fn record_output_path() -> PathBuf {
     let container = Container::parse(&prefs::get().record_container);
-    let dir = if prefs::get().history { paths::captures_dir() } else { record::default_output_dir() };
-    record::output_path(&dir, container)
+    record::output_path(&record::default_output_dir(), container)
 }
 
 fn launch_record(target: Target) {
@@ -907,6 +945,7 @@ fn launch_record(target: Target) {
             Ok(_) => {
                 refresh_record_button();
                 refresh_cam_button();
+                crate::overlay::show_recording_pill();
                 toast("Recording");
             }
             Err(err) => toast(&err.to_string()),
@@ -991,7 +1030,7 @@ fn remember_recording(path: &std::path::Path) {
                 path: path.clone(),
                 source: "record".into(),
             })?;
-            let _ = store::write_thumb(&path, &paths::thumb_file(&id), store::THUMB_EDGE);
+            let _ = db.thumb(&id, &path, &paths::thumb_file(&id), false);
             anyhow::Ok(())
         },
         |result| match result {
@@ -1002,6 +1041,11 @@ fn remember_recording(path: &std::path::Path) {
 }
 
 fn refresh_record_button() {
+    // A recorder that ended by itself (crashed, killed) still leaves its file for history.
+    if let Some(path) = record::ended() {
+        remember_recording(&path);
+        toast(&format!("The recording ended; saved {}", path.display()));
+    }
     RECORD_BTN.with(|b| {
         let Some(btn) = b.borrow().clone() else { return };
         if record::active().is_some() {
@@ -1021,10 +1065,10 @@ fn refresh_record_button() {
         if let Some(session) = session {
             if session.paused {
                 btn.set_icon_name("media-playback-start-symbolic");
-                btn.set_tooltip_text(Some("Resume recording (Ctrl+Shift+P)"));
+                btn.set_tooltip_text(Some("Resume recording (Ctrl+Alt+P)"));
             } else {
                 btn.set_icon_name("media-playback-pause-symbolic");
-                btn.set_tooltip_text(Some("Pause recording (Ctrl+Shift+P)"));
+                btn.set_tooltip_text(Some("Pause recording (Ctrl+Alt+P)"));
             }
         }
     });
@@ -1087,91 +1131,58 @@ pub fn item_menu(id: &str, parent: &gtk::Widget, x: f64, y: f64) {
             old.unparent();
         }
     });
-    let pop = gtk::Popover::new();
+    let menu = gio::Menu::new();
+    menu.append(Some("Open"), Some("item.open"));
+    menu.append(Some(if row.starred { "Unstar" } else { "Star" }), Some("item.star"));
+    if row.kind != CaptureKind::Recording {
+        menu.append(Some("Pin"), Some("item.pin"));
+        menu.append(Some("Copy"), Some("item.copy"));
+    }
+    menu.append(Some("Export…"), Some("item.export"));
+    if row.kind == CaptureKind::Recording && nixe_capture_core::detect::present("ffmpeg") {
+        menu.append(Some("Trim…"), Some("item.trim"));
+    }
+    menu.append(Some("Delete…"), Some("item.delete"));
+    let group = gio::SimpleActionGroup::new();
+    let act = |name: &str, f: Box<dyn Fn()>| {
+        let a = gio::SimpleAction::new(name, None);
+        a.connect_activate(move |_, _| f());
+        group.add_action(&a);
+    };
+    let r = row.clone();
+    act("open", Box::new(move || open_capture(r.clone())));
+    let (id, on) = (row.id.clone(), !row.starred);
+    act("star", Box::new(move || set_starred(&id, on)));
+    let path = row.path.clone();
+    act("pin", Box::new(move || pin_file(&path)));
+    let path = row.path.clone();
+    act("copy", Box::new(move || copy_capture(&path)));
+    let id = row.id.clone();
+    let name = row.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "capture.png".into());
+    act("export", Box::new(move || export_capture(&id, &name)));
+    let r = row.clone();
+    act("trim", Box::new(move || trim_capture(&r)));
+    let id = row.id.clone();
+    act("delete", Box::new(move || confirm_delete(&id)));
+    let pop = gtk::PopoverMenu::from_model(Some(&menu));
+    pop.insert_action_group("item", Some(&group));
     pop.set_parent(parent);
     pop.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
     pop.set_has_arrow(false);
-    let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    list.add_css_class("history-menu");
-    let open = gtk::Button::with_label("Open");
-    open.add_css_class("flat");
-    let star = gtk::Button::with_label(if row.starred { "Unstar" } else { "Star" });
-    star.add_css_class("flat");
-    let pin = gtk::Button::with_label("Pin");
-    pin.add_css_class("flat");
-    let copy = gtk::Button::with_label("Copy");
-    copy.add_css_class("flat");
-    let export = gtk::Button::with_label("Export");
-    export.add_css_class("flat");
-    let delete = gtk::Button::with_label("Delete");
-    delete.add_css_class("flat");
-    list.append(&open);
-    list.append(&star);
-    if row.kind != CaptureKind::Recording {
-        list.append(&pin);
-        list.append(&copy);
-    }
-    list.append(&export);
-    if row.kind == CaptureKind::Recording && nixe_capture_core::detect::present("ffmpeg") {
-        let trim = gtk::Button::with_label("Trim");
-        trim.add_css_class("flat");
-        let pop_trim = pop.clone();
-        let row_trim = row.clone();
-        trim.connect_clicked(move |_| {
-            pop_trim.popdown();
-            trim_capture(&row_trim);
-        });
-        list.append(&trim);
-    }
-    list.append(&delete);
-    pop.set_child(Some(&list));
-    let pop_open = pop.clone();
-    let row_open = row.clone();
-    open.connect_clicked(move |_| {
-        pop_open.popdown();
-        open_capture(row_open.clone());
-    });
-    let pop_star = pop.clone();
-    let id_star = row.id.clone();
-    let star_on = !row.starred;
-    star.connect_clicked(move |_| {
-        pop_star.popdown();
-        set_starred(&id_star, star_on);
-    });
-    let pop_pin = pop.clone();
-    let path_pin = row.path.clone();
-    pin.connect_clicked(move |_| {
-        pop_pin.popdown();
-        pin_file(&path_pin);
-    });
-    let pop_copy = pop.clone();
-    let path_copy = row.path.clone();
-    copy.connect_clicked(move |_| {
-        pop_copy.popdown();
-        copy_capture(&path_copy);
-    });
-    let pop_export = pop.clone();
-    let id_export = row.id.clone();
-    let name_export = row.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "capture.png".into());
-    export.connect_clicked(move |_| {
-        pop_export.popdown();
-        export_capture(&id_export, &name_export);
-    });
-    let pop_del = pop.clone();
-    let id_del = row.id.clone();
-    delete.connect_clicked(move |_| {
-        pop_del.popdown();
-        confirm_delete(&id_del);
-    });
-    MENU.with(|m| *m.borrow_mut() = Some(pop.clone()));
+    MENU.with(|m| *m.borrow_mut() = Some(pop.clone().upcast()));
     pop.popup();
 }
 
+/// Pin a capture as it was edited (marks burned in), off the GTK thread.
 fn pin_file(path: &std::path::Path) {
-    match image::open(path) {
-        Ok(img) => crate::pin::open_rgba(img.to_rgba8()),
-        Err(err) => toast(&err.to_string()),
-    }
+    let path = path.to_path_buf();
+    crate::cmd::background(
+        move || nixe_capture_core::export::shareable(&path).map(|img| img.to_rgba8()),
+        |result| match result {
+            Ok(img) => crate::pin::open_rgba(img),
+            Err(err) => toast(&err.to_string()),
+        },
+    );
 }
 
 fn export_capture(id: &str, name: &str) {
@@ -1272,10 +1283,8 @@ fn trim_dest(src: &std::path::Path) -> PathBuf {
 fn copy_capture(path: &std::path::Path) {
     let path = path.to_path_buf();
     crate::cmd::background(
-        move || {
-            let bytes = std::fs::read(&path)?;
-            clipboard::copy_png(&bytes)
-        },
+        // As edited: a redacted shot is never copied without its redaction.
+        move || clipboard::copy_png(&nixe_capture_core::export::shareable_png(&path)?),
         |result| match result {
             Ok(()) => toast("Copied"),
             Err(err) => toast(&err.to_string()),
@@ -1446,7 +1455,8 @@ fn install_keys(window: &gtk::ApplicationWindow, search: &gtk::SearchEntry) {
             toggle_record(true);
             return glib::Propagation::Stop;
         }
-        if ctrl && shift && key == gdk::Key::p {
+        // Ctrl+Shift+P is the command palette.
+        if ctrl && mods.contains(gdk::ModifierType::ALT_MASK) && matches!(key, gdk::Key::p | gdk::Key::P) {
             pause_recording();
             return glib::Propagation::Stop;
         }
@@ -1517,10 +1527,16 @@ pub fn toast(message: &str) {
     overlay.add_overlay(&bx);
     TOAST.with(|t| *t.borrow_mut() = Some(bx.clone()));
     let overlay = overlay.clone();
-    glib::timeout_add_local_once(std::time::Duration::from_millis(2200), move || {
+    glib::timeout_add_local_once(std::time::Duration::from_millis(3500), move || {
         if bx.parent().is_some() {
             overlay.remove_overlay(&bx);
         }
-        TOAST.with(|t| *t.borrow_mut() = None);
+        // Only forget it if a newer toast hasn't taken its place.
+        TOAST.with(|t| {
+            let mut t = t.borrow_mut();
+            if t.as_ref() == Some(&bx) {
+                *t = None;
+            }
+        });
     });
 }

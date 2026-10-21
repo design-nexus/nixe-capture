@@ -12,7 +12,9 @@ const GROUPS: &[(&str, &str, &str)] = &[
     ("Capture window", "applications-graphics-symbolic", "Theme, glow, motion"),
     ("Capture", "camera-photo-symbolic", "What happens after a shot"),
     ("History", "document-open-recent-symbolic", "Keep, search, and forget captures"),
-    ("OCR", "insert-text-symbolic", "Tesseract and RapidOCR"),
+    ("OCR", "edit-find-symbolic", "Tesseract and RapidOCR"),
+    ("Privacy", "channel-secure-symbolic", "Redaction and Nixe Assistant"),
+    ("Recording", "media-record-symbolic", "Recorder, audio, format, webcam"),
     ("Keyboard", "input-keyboard-symbolic", "Shortcuts"),
 ];
 

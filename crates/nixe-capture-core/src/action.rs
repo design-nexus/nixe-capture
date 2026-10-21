@@ -38,8 +38,13 @@ pub enum Outcome {
 }
 
 pub fn run(action: &Action) -> Result<Outcome> {
-    let Some(shot) = capture(action)? else { return Ok(Outcome::Cancelled) };
-    finish(&shot, action)
+    Ok(run_keeping(action)?.0)
+}
+
+/// [`run`], also handing back the shot (for history).
+pub fn run_keeping(action: &Action) -> Result<(Outcome, Option<crate::capture::Shot>)> {
+    let Some(shot) = capture(action)? else { return Ok((Outcome::Cancelled, None)) };
+    Ok((finish(&shot, action)?, Some(shot)))
 }
 
 /// Grim (and slurp, if the mode needs it). `None` is a cancelled selector.

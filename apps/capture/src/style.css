@@ -51,6 +51,31 @@ window.capture-countdown {
   min-width: 120px;
 }
 
+window.capture-pill {
+  background: transparent;
+}
+
+.capture-pill-bar {
+  background: @theme_bg;
+  color: @theme_text;
+  border: 1px solid @hairline;
+  border-radius: 8px;
+  padding: 4px 6px 4px 12px;
+}
+
+.capture-pill-dot {
+  color: @theme_danger;
+}
+
+.capture-pill-dot.paused {
+  color: @theme_dim_text;
+}
+
+.capture-pill-time {
+  font-feature-settings: "tnum";
+  min-width: 48px;
+}
+
 .capture-countdown-num {
   font-size: 32px;
   font-weight: 600;

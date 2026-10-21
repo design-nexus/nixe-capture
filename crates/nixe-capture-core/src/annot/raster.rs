@@ -1,4 +1,5 @@
-//! Flatten an `EditState` onto pixels. Crop, then blur/pixelate, then cairo strokes.
+//! Flatten an `EditState` onto pixels: blur/pixelate, then cairo marks, then the crop
+//! (marks are in the whole picture's terms; see `STATE_VERSION`).
 
 use super::{Colour, EditState, Mark, NormRect};
 use cairo::{self, Context, Format, ImageSurface};
@@ -11,10 +12,11 @@ const HIGHLIGHTER_ALPHA: f64 = 0.4;
 
 /// Apply `st` to a copy of `src`. `src` is never written.
 pub fn render(src: &RgbaImage, st: &EditState) -> RgbaImage {
-    let mut img = if let Some(c) = st.crop {
-        crop(src, c)
-    } else {
-        src.clone()
+    // Older sidecars put their marks on the cropped picture.
+    let crop_first = st.version < super::STATE_VERSION;
+    let mut img = match st.crop {
+        Some(c) if crop_first => crop(src, c),
+        _ => src.clone(),
     };
     for m in &st.marks {
         match m {
@@ -24,8 +26,15 @@ pub fn render(src: &RgbaImage, st: &EditState) -> RgbaImage {
         }
     }
     draw_on_image(&mut img, &st.marks);
-    img
+    match st.crop {
+        Some(c) if !crop_first => crop(&img, c),
+        _ => img,
+    }
 }
+
+/// The weakest a blur or pixelate may be, as a share of the picture's shorter side:
+/// gentler ones leave text that can be read back.
+const MIN_OBSCURE: f64 = 1.0 / 60.0;
 
 fn crop(img: &RgbaImage, c: NormRect) -> RgbaImage {
     let (w, h) = img.dimensions();
@@ -39,7 +48,8 @@ fn crop(img: &RgbaImage, c: NormRect) -> RgbaImage {
 fn pixelate(img: &mut RgbaImage, rect: NormRect, size: f64) {
     let (w, h) = img.dimensions();
     let (x0, y0, x1, y1) = pixel_box(rect, w, h);
-    let block = ((size * w.min(h) as f64).round() as u32).max(2);
+    let unit = w.min(h) as f64;
+    let block = ((size.max(MIN_OBSCURE) * unit).round() as u32).max(6);
     let mut by = y0;
     while by < y1 {
         let bh = block.min(y1 - by);
@@ -76,7 +86,7 @@ fn blur(img: &mut RgbaImage, rect: NormRect, size: f64) {
     let bw = x1 - x0;
     let bh = y1 - y0;
     let sub = imageops::crop_imm(img, x0, y0, bw, bh).to_image();
-    let sigma = (size as f32 * w.min(h) as f32).clamp(1.0, 48.0);
+    let sigma = (size.max(MIN_OBSCURE) as f32 * w.min(h) as f32).clamp(4.0, 48.0);
     let blurred = imageops::blur(&sub, sigma);
     for y in 0..bh {
         for x in 0..bw {
@@ -189,6 +199,12 @@ fn draw_one(cr: &Context, w: f64, h: f64, unit: f64, mark: &Mark) {
             cr.set_line_width(1.5);
             let _ = cr.stroke();
             paint_label(cr, cx - r * 0.45, cy - r * 0.55, &n.to_string(), colour.contrast(), r * 0.95);
+        }
+        Mark::Fill { rect, colour } => {
+            let r = rect.scaled(w, h);
+            set_colour(cr, *colour, 1.0);
+            cr.rectangle(r.x, r.y, r.w, r.h);
+            let _ = cr.fill();
         }
         Mark::Pixelate { .. } | Mark::Blur { .. } => {}
     }

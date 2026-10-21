@@ -63,6 +63,17 @@ fn main() -> glib::ExitCode {
         };
     }
 
+    // OCR for a shot a hotkey just put in history, run apart so the hotkey returns at once.
+    if let Some(id) = flag_value(&args, "--ocr-id") {
+        return match ocr_into_history(id) {
+            Ok(()) => glib::ExitCode::SUCCESS,
+            Err(err) => {
+                eprintln!("nixe-capture: {err}");
+                glib::ExitCode::FAILURE
+            }
+        };
+    }
+
     if has_flag(&args, "--scroll") && !primary_running() && !has_flag(&args, "--edit") {
         return match run_scroll() {
             Ok(path) => {
@@ -90,7 +101,13 @@ fn main() -> glib::ExitCode {
         && !matches!(action.after, action::After::Edit | action::After::Pin)
         && !primary_running()
     {
-        match run_cli(&action) {
+        let title = nixe_capture_core::select::capture_title();
+        match run_cli(&action).map(|(outcome, shot)| {
+            if let Some(shot) = shot {
+                remember_cold(&shot, &title);
+            }
+            outcome
+        }) {
             Ok(Outcome::Cancelled) => {}
             Ok(Outcome::Copied) => {}
             Ok(Outcome::Saved(path)) => eprintln!("{}", path.display()),
@@ -150,7 +167,9 @@ fn main() -> glib::ExitCode {
             if matches!(action.after, action::After::Edit | action::After::Pin) || window::window().is_none() {
                 window::present(app, value("--section").as_deref());
             }
-            window::capture_with(action.mode, action.after, action.delay);
+            // A relative --save path is the caller's, not this process's.
+            let save = action.save_path.map(|p| if p.is_relative() { cl.cwd().map(|d| d.join(&p)).unwrap_or(p) } else { p });
+            window::capture_with_path(action.mode, action.after, action.delay, save);
             return glib::ExitCode::SUCCESS;
         }
         window::present(app, value("--section").as_deref());
@@ -239,6 +258,7 @@ fn run_record(args: &[String]) -> anyhow::Result<()> {
     use nixe_capture_core::record::{self, Container, RecordRequest, Target};
     if has_flag(args, "--stop") {
         if let Some(path) = record::stop()? {
+            remember_recording_cold(&path);
             eprintln!("{}", path.display());
         }
         return Ok(());
@@ -274,8 +294,8 @@ fn run_record(args: &[String]) -> anyhow::Result<()> {
         _ => (true, false),
     };
     let container = Container::parse(&prefs.record_container);
-    let dir = if prefs.history { paths::captures_dir() } else { record::default_output_dir() };
-    let output = record::output_path(&dir, container);
+    // Recordings are the person's files: the Videos folder, history or not.
+    let output = record::output_path(&record::default_output_dir(), container);
     let with_cam = has_flag(args, "--webcam") || prefs.record_webcam;
     if with_cam && nixe_capture_core::webcam::available() {
         let device = if prefs.record_webcam_device.is_empty() { None } else { Some(prefs.record_webcam_device.as_str()) };
@@ -321,9 +341,71 @@ fn run_scroll() -> anyhow::Result<std::path::PathBuf> {
             path: path.clone(),
             source: "omasnap".into(),
         })?;
-        let _ = nixe_capture_core::store::write_thumb(&path, &paths::thumb_file(&id), nixe_capture_core::store::THUMB_EDGE);
+        let _ = db.thumb(&id, &path, &paths::thumb_file(&id), false);
     }
     Ok(path)
+}
+
+/// Put a hotkey's shot in history (with history on): the PNG, its thumbnail and title
+/// now; its OCR in a detached `--ocr-id` run.
+fn remember_cold(shot: &nixe_capture_core::capture::Shot, title: &str) {
+    let p = prefs::get();
+    if !p.history {
+        return;
+    }
+    let saved = (|| {
+        let png = shot.png()?;
+        let db = nixe_capture_core::store::open(&paths::library_db())?;
+        let (id, path) = db.insert_png(&paths::captures_dir(), &png, shot.image.width() as i32, shot.image.height() as i32, "grim")?;
+        let _ = db.set_title(&id, title);
+        let _ = db.thumb(&id, &path, &paths::thumb_file(&id), false);
+        anyhow::Ok(id)
+    })();
+    match saved {
+        Ok(id) if p.ocr_on_capture => {
+            if let Ok(me) = std::env::current_exe() {
+                let _ = std::process::Command::new(me)
+                    .args(["--ocr-id", &id])
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+            }
+        }
+        Ok(_) => {}
+        Err(err) => eprintln!("nixe-capture: history: {err}"),
+    }
+}
+
+fn ocr_into_history(id: &str) -> anyhow::Result<()> {
+    let p = prefs::get();
+    let db = nixe_capture_core::store::open(&paths::library_db())?;
+    let row = db.get(id)?.ok_or_else(|| anyhow::anyhow!("no capture {id}"))?;
+    let img = image::open(&row.path)?;
+    let r = nixe_capture_core::ocr::recognize(&img, OcrMode::parse(&p.ocr_mode), &p.ocr_langs)?;
+    db.set_ocr(id, &r.engine, &r.text)
+}
+
+/// A recording stopped from the command line goes into history like one stopped in the window.
+fn remember_recording_cold(path: &std::path::Path) {
+    if !prefs::get().history {
+        return;
+    }
+    let saved = (|| {
+        let db = nixe_capture_core::store::open(&paths::library_db())?;
+        let id = db.insert(&nixe_capture_core::store::NewCapture {
+            kind: nixe_capture_core::CaptureKind::Recording,
+            width: 0,
+            height: 0,
+            path: path.to_path_buf(),
+            source: "record".into(),
+        })?;
+        let _ = db.thumb(&id, path, &paths::thumb_file(&id), false);
+        anyhow::Ok(())
+    })();
+    if let Err(err) = saved {
+        eprintln!("nixe-capture: history: {err}");
+    }
 }
 
 fn pick_record_region() -> anyhow::Result<nixe_capture_core::record::Target> {
@@ -354,11 +436,11 @@ fn pick_record_region() -> anyhow::Result<nixe_capture_core::record::Target> {
     }
 }
 
-fn run_cli(action: &Action) -> anyhow::Result<Outcome> {
+fn run_cli(action: &Action) -> anyhow::Result<(Outcome, Option<nixe_capture_core::capture::Shot>)> {
     let select = matches!(action.mode, CaptureMode::SelectRegion | CaptureMode::SelectWindow);
     let mut action = action.clone();
     if action.delay > 0 && !overlay::run_countdown_blocking(action.delay) {
-        return Ok(Outcome::Cancelled);
+        return Ok((Outcome::Cancelled, None));
     }
     action.delay = 0;
     if select && overlay::prefer() {
@@ -368,7 +450,7 @@ fn run_cli(action: &Action) -> anyhow::Result<Outcome> {
         }
     }
     action::require_tools_for(&action.mode, action.after, action.ocr_mode)?;
-    action::run(&action)
+    action::run_keeping(&action)
 }
 
 #[cfg(test)]

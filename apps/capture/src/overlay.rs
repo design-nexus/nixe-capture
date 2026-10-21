@@ -107,8 +107,7 @@ pub fn countdown(secs: u32, on_done: impl FnOnce(bool) + 'static) -> anyhow::Res
         });
         return Ok(());
     }
-    let outputs = outputs()?;
-    let (monitor, _) = outputs.into_iter().next().ok_or_else(|| anyhow::anyhow!("no monitors"))?;
+    let monitor = focused_output()?;
     let window = gtk::Window::new();
     window.init_layer_shell();
     window.set_layer(Layer::Overlay);
@@ -324,7 +323,9 @@ pub fn pick(still: Shot, snap: bool, on_pick: impl FnOnce(Option<Rect>) + 'stati
 }
 
 /// Cold CLI: freeze, pick, crop, then copy/save/OCR. Caller has already delayed.
-pub fn run_cli(action: &nixe_capture_core::action::Action) -> anyhow::Result<nixe_capture_core::action::Outcome> {
+pub fn run_cli(
+    action: &nixe_capture_core::action::Action,
+) -> anyhow::Result<(nixe_capture_core::action::Outcome, Option<Shot>)> {
     ensure_gtk()?;
     if !supported() {
         anyhow::bail!("layer-shell isn't available");
@@ -334,10 +335,10 @@ pub fn run_cli(action: &nixe_capture_core::action::Action) -> anyhow::Result<nix
     let snap = matches!(action.mode, CaptureMode::SelectWindow);
     let picked = run_blocking(still.clone(), snap);
     match picked {
-        None => Ok(nixe_capture_core::action::Outcome::Cancelled),
+        None => Ok((nixe_capture_core::action::Outcome::Cancelled, None)),
         Some(rect) => {
             let shot = still.crop_layout(rect)?;
-            nixe_capture_core::action::finish(&shot, action)
+            Ok((nixe_capture_core::action::finish(&shot, action)?, Some(shot)))
         }
     }
 }
@@ -357,6 +358,92 @@ fn run_blocking(still: Shot, snap: bool) -> Option<Rect> {
     }
     main.run();
     result.borrow_mut().take().flatten()
+}
+
+/// The monitor with the focused window (Hyprland's focused monitor), else the first.
+fn focused_output() -> anyhow::Result<gdk::Monitor> {
+    let outputs = outputs()?;
+    let focused = select::focused_monitor().ok().flatten().map(|m| m.geometry);
+    outputs
+        .iter()
+        .find(|(_, r)| Some(*r) == focused)
+        .or(outputs.first())
+        .map(|(m, _)| m.clone())
+        .ok_or_else(|| anyhow::anyhow!("no monitors"))
+}
+
+thread_local! {
+    static PILL: RefCell<Option<gtk::Window>> = const { RefCell::new(None) };
+}
+
+/// While recording: a small bar at the top of the focused monitor with the time recorded
+/// (paused time not counted) and pause and stop buttons. Not focusable; takes no keys.
+pub fn show_recording_pill() {
+    hide_recording_pill();
+    if !supported() {
+        return;
+    }
+    let Ok(monitor) = focused_output() else { return };
+    let window = gtk::Window::new();
+    window.init_layer_shell();
+    window.set_layer(Layer::Overlay);
+    window.set_namespace(Some("nixe-capture-recording"));
+    window.set_keyboard_mode(KeyboardMode::None);
+    window.set_anchor(Edge::Top, true);
+    window.set_margin(Edge::Top, 8);
+    window.set_exclusive_zone(0);
+    window.set_monitor(Some(&monitor));
+    window.add_css_class("capture-pill");
+    window.set_decorated(false);
+    window.set_resizable(false);
+    if let Some(app) = gtk::gio::Application::default().and_then(|a| a.downcast::<gtk::Application>().ok()) {
+        window.set_application(Some(&app));
+    }
+    let bar = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    bar.add_css_class("capture-pill-bar");
+    let dot = gtk::Image::from_icon_name("media-record-symbolic");
+    dot.add_css_class("capture-pill-dot");
+    let time = gtk::Label::new(Some("0:00"));
+    time.add_css_class("capture-pill-time");
+    bar.append(&dot);
+    bar.append(&time);
+    if nixe_capture_core::record::can_pause() {
+        let pause = crate::widgets::icon_button("media-playback-pause-symbolic", "Pause or resume (Ctrl+Alt+P)");
+        pause.connect_clicked(|_| crate::window::pause_recording());
+        bar.append(&pause);
+    }
+    let stop = crate::widgets::icon_button("media-playback-stop-symbolic", "Stop recording (Ctrl+R)");
+    stop.connect_clicked(|_| crate::window::stop_recording());
+    bar.append(&stop);
+    window.set_child(Some(&bar));
+    let seconds = Cell::new(0u64);
+    let weak = window.downgrade();
+    glib::timeout_add_seconds_local(1, move || {
+        let Some(w) = weak.upgrade() else { return glib::ControlFlow::Break };
+        let Some(session) = nixe_capture_core::record::active() else {
+            w.close();
+            return glib::ControlFlow::Break;
+        };
+        if !session.paused {
+            seconds.set(seconds.get() + 1);
+        }
+        let n = seconds.get();
+        time.set_text(&if n >= 3600 { format!("{}:{:02}:{:02}", n / 3600, n / 60 % 60, n % 60) } else { format!("{}:{:02}", n / 60, n % 60) });
+        if session.paused {
+            dot.add_css_class("paused");
+        } else {
+            dot.remove_css_class("paused");
+        }
+        glib::ControlFlow::Continue
+    });
+    window.present();
+    PILL.with(|p| *p.borrow_mut() = Some(window));
+}
+
+pub fn hide_recording_pill() {
+    if let Some(w) = PILL.with(|p| p.borrow_mut().take()) {
+        w.close();
+    }
 }
 
 fn outputs() -> anyhow::Result<Vec<(gdk::Monitor, Rect)>> {

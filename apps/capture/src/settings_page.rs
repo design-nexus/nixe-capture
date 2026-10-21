@@ -172,7 +172,7 @@ fn history_group(page: &Page) {
 }
 
 fn privacy_group(page: &Page) {
-    let group = page.group("Assistant");
+    let group = page.group("Privacy");
     let prefs = prefs::get();
     let (row, _) = widgets::switch_row(
         "Assistant can send a screenshot",
@@ -183,16 +183,17 @@ fn privacy_group(page: &Page) {
     group.add(&row);
     let (row, _) = widgets::switch_row(
         "Redact secrets after OCR",
-        "Pixelate emails, URLs, phone numbers, cards, and keys found in the text. Stays on this computer.",
+        "Cover emails, URLs, phone numbers, cards, and keys found in the text with solid boxes, and leave the shot out of search. Stays on this computer.",
         prefs.auto_redact,
         |on| prefs::update(|p| p.auto_redact = on),
     );
     group.add(&row);
-    let (row, _) = widgets::button_row("Tutorial", "Show the three-step capture walkthrough again.", "Show", |_| {
+    let tutorial = widgets::icon_button("help-browser-symbolic", "Show the walkthrough");
+    tutorial.connect_clicked(|_| {
         prefs::update(|p| p.tutorial_done = false);
         window::show_tutorial();
     });
-    group.add(&row);
+    group.add(&widgets::row("Tutorial", "Show the three-step capture walkthrough again.", Some(tutorial.upcast_ref())));
 }
 
 fn ocr_group(page: &Page) {
@@ -209,6 +210,49 @@ fn ocr_group(page: &Page) {
         prefs::update(|p| p.ocr_on_capture = on);
     });
     group.add(&row);
+    // Tesseract's installed languages (more come as tesseract-data-* packages).
+    let mut langs = nixe_capture_core::ocr::tesseract_languages();
+    if !langs.contains(&prefs.ocr_langs) {
+        langs.insert(0, prefs.ocr_langs.clone());
+    }
+    if langs.len() > 1 {
+        let opts = langs.iter().map(|l| (l.clone(), l.clone())).collect();
+        let (row, _) = widgets::choice_row(
+            "Language",
+            "The language Tesseract reads. Install others as <tt>tesseract-data-*</tt> packages.",
+            opts,
+            &prefs.ocr_langs,
+            |v| prefs::update(|p| p.ocr_langs = v),
+        );
+        group.add(&row);
+    }
+    let present = nixe_capture_core::ocr::models_present();
+    let get = widgets::icon_button("folder-download-symbolic", "Download the RapidOCR models");
+    get.set_visible(!present);
+    let state = widgets::label(if present { "Installed" } else { "Not downloaded" }, "dim");
+    let right = widgets::hbox(8);
+    right.append(&state);
+    right.append(&get);
+    get.connect_clicked(move |b| {
+        b.set_sensitive(false);
+        state.set_text("Downloading…");
+        let (b, state) = (b.clone(), state.clone());
+        crate::cmd::background(nixe_capture_core::ocr::download_models, move |result| match result {
+            Ok(()) => {
+                state.set_text("Installed");
+                b.set_visible(false);
+            }
+            Err(err) => {
+                state.set_text(&err.to_string());
+                b.set_sensitive(true);
+            }
+        });
+    });
+    group.add(&widgets::row(
+        "RapidOCR models",
+        "Automatic falls back to RapidOCR on hard-to-read text once its models are here (about 15 MB).",
+        Some(right.upcast_ref()),
+    ));
 }
 
 fn record_group(page: &Page) {
@@ -271,7 +315,7 @@ fn record_group(page: &Page) {
     group.add(&row);
     if tools.gpu_screen_recorder {
         let (row, _) = widgets::switch_row(
-            "Use screenshot portal",
+            "Use the ScreenCast portal",
             "gpu-screen-recorder -w portal. Off uses the focused monitor or a dragged region.",
             prefs.record_use_portal,
             |on| prefs::update(|p| p.record_use_portal = on),

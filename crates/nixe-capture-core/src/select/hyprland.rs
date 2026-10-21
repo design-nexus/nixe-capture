@@ -18,6 +18,11 @@ struct HyprMonitor {
     #[serde(default)]
     transform: i32,
     focused: bool,
+    #[serde(rename = "activeWorkspace", default)]
+    active_workspace: Option<HyprWorkspace>,
+    /// Shown over the active one when open; id 0 when none is.
+    #[serde(rename = "specialWorkspace", default)]
+    special_workspace: Option<HyprWorkspace>,
 }
 
 #[derive(Deserialize)]
@@ -48,7 +53,8 @@ pub fn monitors() -> Result<Vec<Monitor>> {
         .map(|m| {
             let mut w = (m.width as f64 / m.scale).floor() as i32;
             let mut h = (m.height as f64 / m.scale).floor() as i32;
-            if m.transform == 1 || m.transform == 3 {
+            // 1 and 3 rotate 90° and 270°; 5 and 7 are the same, flipped.
+            if matches!(m.transform, 1 | 3 | 5 | 7) {
                 std::mem::swap(&mut w, &mut h);
             }
             Monitor { name: m.name, geometry: Rect::new(m.x, m.y, w.max(1), h.max(1)), scale: m.scale, focused: m.focused }
@@ -56,12 +62,30 @@ pub fn monitors() -> Result<Vec<Monitor>> {
         .collect())
 }
 
+/// Workspaces on screen now: each monitor's active one and any open special one.
+fn visible_workspaces() -> Option<Vec<i32>> {
+    let raw = hyprctl(&["monitors", "-j"]).ok()?;
+    let list: Vec<HyprMonitor> = serde_json::from_str(&raw).ok()?;
+    Some(
+        list.iter()
+            .flat_map(|m| [m.active_workspace.as_ref(), m.special_workspace.as_ref()])
+            .flatten()
+            .map(|w| w.id)
+            .filter(|&id| id != 0)
+            .collect(),
+    )
+}
+
 pub fn windows() -> Result<Vec<Window>> {
     let raw = hyprctl(&["clients", "-j"])?;
     let list: Vec<HyprClient> = serde_json::from_str(&raw).context("hyprctl clients")?;
+    // Windows on other workspaces aren't on screen; snapping to one would pick nothing
+    // the person can see. Without the monitor list, keep them all.
+    let shown = visible_workspaces();
     Ok(list
         .into_iter()
         .filter(|c| c.mapped && !c.hidden)
+        .filter(|c| shown.as_ref().is_none_or(|ids| ids.contains(&c.workspace.id)))
         .map(|c| Window {
             class: c.class,
             title: c.title,

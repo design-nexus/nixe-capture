@@ -35,6 +35,14 @@ pub fn active_window() -> Result<Option<Window>> {
     Ok(windows()?.into_iter().find(|w| w.focused && !w.hidden))
 }
 
+/// A title for a capture taken now: the focused window's title, or its class, at most
+/// 120 characters; empty when there's none.
+pub fn capture_title() -> String {
+    let Ok(Some(w)) = active_window() else { return String::new() };
+    let text = if w.title.trim().is_empty() { w.class } else { w.title };
+    text.trim().chars().take(120).collect()
+}
+
 pub fn focused_monitor() -> Result<Option<Monitor>> {
     Ok(monitors()?.into_iter().find(|m| m.focused))
 }
