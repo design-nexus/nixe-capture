@@ -7,5 +7,16 @@
   ],
   "manifest": "Cargo.toml",
   "prepare": [],
-  "binaries": []
+  "binaries": [],
+  "test_commands": [
+    [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nixe-capture",
+      "--bin",
+      "nixe-capture"
+    ]
+  ]
 }
