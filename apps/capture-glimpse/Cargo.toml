@@ -13,6 +13,6 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.104"
-glimpse-plugin-sdk = { path = "../../crates/glimpse-plugin-sdk" }
+glimpse-plugin-sdk = { git = "file:///home/ken/Projects/nixe-migration-97c1899-apps-complete/nixe-glimpse", rev = "0abf301d8abb37fb2688193a5fc1bdaebf5758d0" }
 nixe-capture-core = { path = "../../crates/nixe-capture-core" }
 serde_json = "1.0.151"

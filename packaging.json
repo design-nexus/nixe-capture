@@ -1,0 +1,11 @@
+{
+  "application": "capture",
+  "directory": "capture",
+  "packages": [
+    "nixe-capture",
+    "nixe-capture-glimpse"
+  ],
+  "manifest": "Cargo.toml",
+  "prepare": [],
+  "binaries": []
+}
