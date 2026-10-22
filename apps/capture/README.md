@@ -6,7 +6,7 @@ searchable history.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/design-nexus/nixe/main/install.sh | bash -s -- capture
+curl -fsSL https://raw.githubusercontent.com/design-nexus/nixe-capture/main/install.sh | bash -s -- capture
 ```
 
 This installs grim, wl-clipboard, Tesseract (with English) and gtk4-layer-shell if they're
