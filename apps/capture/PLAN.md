@@ -8,7 +8,7 @@ Phase 1 is the only implementation this plan authorizes. Later phases are specif
 
 ## Decisions from the existing tree
 
-`nixe/STYLE.md` is the visual contract. Music (`apps/music/src/window.rs`) is the sidebar reference. Settings is the settings-card reference. Photos (`apps/gallery/src/edit/`) is the annotation-object reference. Shared behavior comes from `nixe-core`, `nixe-theme`, `nixe-ui`, and `nixe-icons`. Every current app is GTK 4 (`gtk4` 0.11, feature `v4_18`) with no libadwaita and no WebKit. Capture follows that.
+`STYLE.md` in [nixe-design](https://github.com/design-nexus/nixe-design) is the visual contract. Music (`apps/music/src/window.rs`) is the sidebar reference. Settings is the settings-card reference. Photos (`apps/gallery/src/edit/`) is the annotation-object reference. Shared behavior comes from `nixe-core`, `nixe-theme`, `nixe-ui`, and `nixe-icons`. Every current app is GTK 4 (`gtk4` 0.11, feature `v4_18`) with no libadwaita and no WebKit. Capture follows that.
 
 There is no Nixe Drive app and no Nixe Clipboard app. Clipboard is GTK plus `wl-copy`/`wl-paste` (Chat) or `wl-clipboard-rs` (Passwords). Drive sharing is a Phase 3 placeholder that does not invent a storage API.
 
