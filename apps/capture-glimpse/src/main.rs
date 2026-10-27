@@ -2,8 +2,8 @@
 
 use anyhow::{Result, bail};
 use glimpse_plugin_sdk::{Action, Hit, Request, serve};
-use nixe_capture_core::search::library_query;
-use nixe_capture_core::store::{CaptureRow, open_readonly};
+use nyx_capture_core::search::library_query;
+use nyx_capture_core::store::{CaptureRow, open_readonly};
 use serde_json::{Value, json};
 use std::path::PathBuf;
 
@@ -15,13 +15,13 @@ fn main() {
 }
 
 fn library() -> PathBuf {
-    if let Some(path) = std::env::var_os("NIXE_CAPTURE_DB") {
+    if let Some(path) = std::env::var_os("NYX_CAPTURE_DB") {
         return PathBuf::from(path);
     }
     let data = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
-    data.unwrap_or_else(|| PathBuf::from(".local/share")).join("nixe-capture/capture.sqlite")
+    data.unwrap_or_else(|| PathBuf::from(".local/share")).join("nyx-capture/capture.sqlite")
 }
 
 fn answer(request: &Request) -> Result<Value> {
@@ -84,9 +84,9 @@ fn activate(request: &Request) -> Result<Value> {
         "scroll" => "--scroll",
         _ => bail!("unknown capture command"),
     };
-    // The plugin cannot spawn GTK. Until Glimpse is allowed to launch nixe-capture,
+    // The plugin cannot spawn GTK. Until Glimpse is allowed to launch nyx-capture,
     // activating a command copies the CLI so it can be run outside the sandbox.
-    Ok(serde_json::to_value(Action::Copy { text: format!("nixe-capture {flag}") })?)
+    Ok(serde_json::to_value(Action::Copy { text: format!("nyx-capture {flag}") })?)
 }
 
 fn command_hit(query: &str) -> Option<Hit> {
@@ -108,10 +108,10 @@ fn command_hit(query: &str) -> Option<Hit> {
 
 fn command_preview(id: &str) -> Option<String> {
     match id {
-        "cmd:region" => Some("Drag a region. Run nixe-capture --region.".into()),
-        "cmd:window" => Some("Pick a window. Run nixe-capture --window.".into()),
-        "cmd:fullscreen" => Some("Capture the focused monitor. Run nixe-capture --fullscreen.".into()),
-        "cmd:scroll" => Some("Scroll a region. Run nixe-capture --scroll.".into()),
+        "cmd:region" => Some("Drag a region. Run nyx-capture --region.".into()),
+        "cmd:window" => Some("Pick a window. Run nyx-capture --window.".into()),
+        "cmd:fullscreen" => Some("Capture the focused monitor. Run nyx-capture --fullscreen.".into()),
+        "cmd:scroll" => Some("Scroll a region. Run nyx-capture --scroll.".into()),
         _ => None,
     }
 }
@@ -148,7 +148,7 @@ fn library_hit(row: CaptureRow, ocr: String) -> Hit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nixe_capture_core::store::{CaptureKind, NewCapture, open};
+    use nyx_capture_core::store::{CaptureKind, NewCapture, open};
     use std::sync::Mutex;
 
     static LOCK: Mutex<()> = Mutex::new(());
@@ -156,28 +156,28 @@ mod tests {
     #[test]
     fn commands_do_not_need_a_library() {
         let _guard = LOCK.lock().unwrap();
-        unsafe { std::env::remove_var("NIXE_CAPTURE_DB") };
+        unsafe { std::env::remove_var("NYX_CAPTURE_DB") };
         let hits = answer(&request("search", json!({"query": "capture region", "limit": 10}))).unwrap();
         assert_eq!(hits[0]["id"], "cmd:region");
         assert_eq!(hits[0]["action"]["kind"], "activate");
         assert_eq!(hits[0]["action"]["token"], "region");
         let preview = answer(&request("preview", json!({"result_id": "cmd:region"}))).unwrap();
-        assert!(preview["text"].as_str().unwrap().contains("nixe-capture --region"));
+        assert!(preview["text"].as_str().unwrap().contains("nyx-capture --region"));
         let action = answer(&request("activate", json!({"token": "region"}))).unwrap();
         assert_eq!(action["kind"], "copy");
-        assert_eq!(action["text"], "nixe-capture --region");
+        assert_eq!(action["text"], "nyx-capture --region");
         let screen = answer(&request("search", json!({"query": "capture screen"}))).unwrap();
         assert_eq!(screen[0]["action"]["token"], "fullscreen");
         let scroll = answer(&request("search", json!({"query": "capture scroll"}))).unwrap();
         assert_eq!(scroll[0]["action"]["token"], "scroll");
         let action = answer(&request("activate", json!({"token": "scroll"}))).unwrap();
-        assert_eq!(action["text"], "nixe-capture --scroll");
+        assert_eq!(action["text"], "nyx-capture --scroll");
     }
 
     #[test]
     fn search_and_preview_copy_ocr() {
         let _guard = LOCK.lock().unwrap();
-        let dir = std::env::temp_dir().join(format!("nixe-capture-glimpse-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nyx-capture-glimpse-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("capture.sqlite");
         let id = {
@@ -194,7 +194,7 @@ mod tests {
             db.set_ocr(&id, "tesseract", "kernel panic on boot").unwrap();
             id
         };
-        unsafe { std::env::set_var("NIXE_CAPTURE_DB", &path) };
+        unsafe { std::env::set_var("NYX_CAPTURE_DB", &path) };
 
         let hits = answer(&request("search", json!({"query": "kernel", "limit": 10}))).unwrap();
         assert_eq!(hits.as_array().unwrap().len(), 1);
@@ -218,7 +218,7 @@ mod tests {
         let extracted = answer(&request("extract", json!({"path": dir.join("shot.png").display().to_string()}))).unwrap();
         assert!(extracted.as_array().unwrap().is_empty());
 
-        unsafe { std::env::remove_var("NIXE_CAPTURE_DB") };
+        unsafe { std::env::remove_var("NYX_CAPTURE_DB") };
         let _ = std::fs::remove_dir_all(dir);
     }
 

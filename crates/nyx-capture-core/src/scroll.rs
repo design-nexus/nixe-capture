@@ -53,7 +53,7 @@ mod tests {
 
     #[test]
     fn newest_png_picks_latest() {
-        let dir = std::env::temp_dir().join(format!("nixe-scroll-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("nyx-scroll-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let a = dir.join("a.png");

@@ -5,12 +5,12 @@ use gtk::gdk;
 use gtk::glib;
 use gtk::prelude::*;
 use image::RgbaImage;
-use nixe_capture_core::capture::Shot;
+use nyx_capture_core::capture::Shot;
 use std::cell::RefCell;
 use std::ffi::{CString, c_char, c_void};
 
 /// Wayland app-id / Hyprland class. `install.sh` writes a float+pin rule for it.
-pub const CLASS: &str = "io.github.design_nexus.nixe.Capture.Pin";
+pub const CLASS: &str = "io.github.design_nexus.nyx.Capture.Pin";
 const TITLE: &str = "Capture pin";
 const MIN_EDGE: i32 = 160;
 const MAX_EDGE: i32 = 1600;

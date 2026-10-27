@@ -441,7 +441,7 @@ mod tests {
 
     #[test]
     fn insert_search_prune() {
-        let dir = std::env::temp_dir().join(format!("nixe-capture-test-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("nyx-capture-test-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let db = open(&dir.join("capture.sqlite")).unwrap();
         let id = db
@@ -466,7 +466,7 @@ mod tests {
 
     #[test]
     fn delete_removes_the_png_and_sidecar() {
-        let dir = std::env::temp_dir().join(format!("nixe-capture-del-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("nyx-capture-del-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let png = dir.join("shot.png");
         std::fs::write(&png, b"png").unwrap();
@@ -491,7 +491,7 @@ mod tests {
 
     #[test]
     fn sensitive_drops_ocr_and_sidecar() {
-        let dir = std::env::temp_dir().join(format!("nixe-capture-sens-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("nyx-capture-sens-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let png = dir.join("shot.png");
         std::fs::write(&png, b"png").unwrap();
@@ -520,7 +520,7 @@ mod tests {
 
     #[test]
     fn path_lookup_takes_wildcards_literally() {
-        let dir = std::env::temp_dir().join(format!("nixe-capture-like-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("nyx-capture-like-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let db = open(&dir.join("capture.sqlite")).unwrap();
         let add = |name: &str| {
@@ -536,7 +536,7 @@ mod tests {
 
     #[test]
     fn thumbnails_are_recorded_and_deleted_and_show_marks() {
-        let dir = std::env::temp_dir().join(format!("nixe-capture-th-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("nyx-capture-th-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let png = dir.join("s.png");
         image::RgbaImage::from_pixel(40, 40, image::Rgba([255, 255, 255, 255])).save(&png).unwrap();
@@ -560,7 +560,7 @@ mod tests {
 
     #[test]
     fn thumb_is_a_smaller_jpeg() {
-        let dir = std::env::temp_dir().join(format!("nixe-capture-thumb-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("nyx-capture-thumb-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let png = dir.join("src.png");
         image::RgbImage::from_pixel(64, 32, image::Rgb([20, 80, 160])).save(&png).unwrap();
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn insert_png_stores_a_dhash() {
-        let dir = std::env::temp_dir().join(format!("nixe-capture-dhash-{}", Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("nyx-capture-dhash-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut png = Vec::new();
         image::DynamicImage::ImageRgb8(image::RgbImage::from_fn(16, 8, |x, _| image::Rgb([x as u8 * 16, 0, 0])))

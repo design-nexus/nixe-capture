@@ -17,13 +17,13 @@ mod window;
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use nixe_capture_core::action::{self, Action, Outcome};
-use nixe_capture_core::capture::CaptureMode;
-use nixe_capture_core::ocr::OcrMode;
+use nyx_capture_core::action::{self, Action, Outcome};
+use nyx_capture_core::capture::CaptureMode;
+use nyx_capture_core::ocr::OcrMode;
 
-pub const APP_ID: &str = "io.github.design_nexus.nixe.Capture";
+pub const APP_ID: &str = "io.github.design_nexus.nyx.Capture";
 
-const USAGE: &str = "Usage: nixe-capture [OPTIONS]\n\
+const USAGE: &str = "Usage: nyx-capture [OPTIONS]\n\
 \n\
   --region            drag a region\n\
   --window            pick a window\n\
@@ -46,7 +46,7 @@ const USAGE: &str = "Usage: nixe-capture [OPTIONS]\n\
   --toggle            close the window if it's open, otherwise open it\n";
 
 fn main() -> glib::ExitCode {
-    nixe_core::app::init(nixe_core::app::App { slug: "nixe-capture", name: "Capture" });
+    nyx_core::app::init(nyx_core::app::App { slug: "nyx-capture", name: "Capture" });
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         print!("{USAGE}");
@@ -54,7 +54,7 @@ fn main() -> glib::ExitCode {
     }
 
     if has_flag(&args, "--gst-worker") {
-        return match nixe_capture_core::record::run_gst_worker() {
+        return match nyx_capture_core::record::run_gst_worker() {
             Ok(()) => glib::ExitCode::SUCCESS,
             Err(err) => {
                 eprintln!("{err}");
@@ -68,7 +68,7 @@ fn main() -> glib::ExitCode {
         return match ocr_into_history(id) {
             Ok(()) => glib::ExitCode::SUCCESS,
             Err(err) => {
-                eprintln!("nixe-capture: {err}");
+                eprintln!("nyx-capture: {err}");
                 glib::ExitCode::FAILURE
             }
         };
@@ -101,7 +101,7 @@ fn main() -> glib::ExitCode {
         && !matches!(action.after, action::After::Edit | action::After::Pin)
         && !primary_running()
     {
-        let title = nixe_capture_core::select::capture_title();
+        let title = nyx_capture_core::select::capture_title();
         match run_cli(&action).map(|(outcome, shot)| {
             if let Some(shot) = shot {
                 remember_cold(&shot, &title);
@@ -133,7 +133,7 @@ fn main() -> glib::ExitCode {
     app.connect_startup(|app| {
         theme::install();
         overlay::mark_theme_installed();
-        nixe_core::control::serve_async(app, control::tools(), control::handle);
+        nyx_core::control::serve_async(app, control::tools(), control::handle);
     });
     app.connect_command_line(|app, cl| {
         let argv: Vec<String> = cl.arguments().iter().map(|a| a.to_string_lossy().to_string()).collect();
@@ -256,7 +256,7 @@ fn cli_action(args: &[String]) -> Option<Action> {
 }
 
 fn run_record(args: &[String]) -> anyhow::Result<()> {
-    use nixe_capture_core::record::{self, Container, RecordRequest, Target};
+    use nyx_capture_core::record::{self, Container, RecordRequest, Target};
     if has_flag(args, "--stop") {
         if let Some(path) = record::stop()? {
             remember_recording_cold(&path);
@@ -274,7 +274,7 @@ fn run_record(args: &[String]) -> anyhow::Result<()> {
         return Ok(());
     }
     let prefs = prefs::get();
-    let pipewire = nixe_capture_core::record::pick(&prefs.recorder) == Some(nixe_capture_core::RecordBackend::GstPortal);
+    let pipewire = nyx_capture_core::record::pick(&prefs.recorder) == Some(nyx_capture_core::RecordBackend::GstPortal);
     let target = if pipewire {
         Target::Portal
     } else if has_flag(args, "--region") {
@@ -298,9 +298,9 @@ fn run_record(args: &[String]) -> anyhow::Result<()> {
     // Recordings are the person's files: the Videos folder, history or not.
     let output = record::output_path(&record::default_output_dir(), container);
     let with_cam = has_flag(args, "--webcam") || prefs.record_webcam;
-    if with_cam && nixe_capture_core::webcam::available() {
+    if with_cam && nyx_capture_core::webcam::available() {
         let device = if prefs.record_webcam_device.is_empty() { None } else { Some(prefs.record_webcam_device.as_str()) };
-        if let Err(err) = nixe_capture_core::webcam::start(device, nixe_capture_core::webcam::Size::parse(&prefs.record_webcam_size), true)
+        if let Err(err) = nyx_capture_core::webcam::start(device, nyx_capture_core::webcam::Size::parse(&prefs.record_webcam_size), true)
         {
             eprintln!("{err}");
         }
@@ -322,7 +322,7 @@ fn run_record(args: &[String]) -> anyhow::Result<()> {
         }
         Err(err) => {
             if with_cam {
-                nixe_capture_core::webcam::stop();
+                nyx_capture_core::webcam::stop();
             }
             Err(err)
         }
@@ -330,13 +330,13 @@ fn run_record(args: &[String]) -> anyhow::Result<()> {
 }
 
 fn run_scroll() -> anyhow::Result<std::path::PathBuf> {
-    let dir = if prefs::get().history { paths::captures_dir() } else { nixe_capture_core::action::default_save_dir() };
-    let path = nixe_capture_core::scroll::capture(&dir)?;
+    let dir = if prefs::get().history { paths::captures_dir() } else { nyx_capture_core::action::default_save_dir() };
+    let path = nyx_capture_core::scroll::capture(&dir)?;
     if prefs::get().history {
         let img = image::open(&path)?;
-        let db = nixe_capture_core::store::open(&paths::library_db())?;
-        let id = db.insert(&nixe_capture_core::store::NewCapture {
-            kind: nixe_capture_core::CaptureKind::Screenshot,
+        let db = nyx_capture_core::store::open(&paths::library_db())?;
+        let id = db.insert(&nyx_capture_core::store::NewCapture {
+            kind: nyx_capture_core::CaptureKind::Screenshot,
             width: img.width() as i32,
             height: img.height() as i32,
             path: path.clone(),
@@ -349,14 +349,14 @@ fn run_scroll() -> anyhow::Result<std::path::PathBuf> {
 
 /// Put a hotkey's shot in history (with history on): the PNG, its thumbnail and title
 /// now; its OCR in a detached `--ocr-id` run.
-fn remember_cold(shot: &nixe_capture_core::capture::Shot, title: &str) {
+fn remember_cold(shot: &nyx_capture_core::capture::Shot, title: &str) {
     let p = prefs::get();
     if !p.history {
         return;
     }
     let saved = (|| {
         let png = shot.png()?;
-        let db = nixe_capture_core::store::open(&paths::library_db())?;
+        let db = nyx_capture_core::store::open(&paths::library_db())?;
         let (id, path) = db.insert_png(&paths::captures_dir(), &png, shot.image.width() as i32, shot.image.height() as i32, "grim")?;
         let _ = db.set_title(&id, title);
         let _ = db.thumb(&id, &path, &paths::thumb_file(&id), false);
@@ -374,16 +374,16 @@ fn remember_cold(shot: &nixe_capture_core::capture::Shot, title: &str) {
             }
         }
         Ok(_) => {}
-        Err(err) => eprintln!("nixe-capture: history: {err}"),
+        Err(err) => eprintln!("nyx-capture: history: {err}"),
     }
 }
 
 fn ocr_into_history(id: &str) -> anyhow::Result<()> {
     let p = prefs::get();
-    let db = nixe_capture_core::store::open(&paths::library_db())?;
+    let db = nyx_capture_core::store::open(&paths::library_db())?;
     let row = db.get(id)?.ok_or_else(|| anyhow::anyhow!("no capture {id}"))?;
     let img = image::open(&row.path)?;
-    let r = nixe_capture_core::ocr::recognize(&img, OcrMode::parse(&p.ocr_mode), &p.ocr_langs)?;
+    let r = nyx_capture_core::ocr::recognize(&img, OcrMode::parse(&p.ocr_mode), &p.ocr_langs)?;
     db.set_ocr(id, &r.engine, &r.text)
 }
 
@@ -393,9 +393,9 @@ fn remember_recording_cold(path: &std::path::Path) {
         return;
     }
     let saved = (|| {
-        let db = nixe_capture_core::store::open(&paths::library_db())?;
-        let id = db.insert(&nixe_capture_core::store::NewCapture {
-            kind: nixe_capture_core::CaptureKind::Recording,
+        let db = nyx_capture_core::store::open(&paths::library_db())?;
+        let id = db.insert(&nyx_capture_core::store::NewCapture {
+            kind: nyx_capture_core::CaptureKind::Recording,
             width: 0,
             height: 0,
             path: path.to_path_buf(),
@@ -405,12 +405,12 @@ fn remember_recording_cold(path: &std::path::Path) {
         anyhow::Ok(())
     })();
     if let Err(err) = saved {
-        eprintln!("nixe-capture: history: {err}");
+        eprintln!("nyx-capture: history: {err}");
     }
 }
 
-fn pick_record_region() -> anyhow::Result<nixe_capture_core::record::Target> {
-    use nixe_capture_core::record::Target;
+fn pick_record_region() -> anyhow::Result<nyx_capture_core::record::Target> {
+    use nyx_capture_core::record::Target;
     if overlay::prefer() && overlay::supported() {
         overlay::ensure_gtk()?;
         let still = overlay::freeze()?;
@@ -431,13 +431,13 @@ fn pick_record_region() -> anyhow::Result<nixe_capture_core::record::Target> {
         };
         return Ok(Target::Region(rect));
     }
-    match nixe_capture_core::capture::slurp_region()? {
+    match nyx_capture_core::capture::slurp_region()? {
         Some(rect) => Ok(Target::Region(rect)),
         None => anyhow::bail!("cancelled"),
     }
 }
 
-fn run_cli(action: &Action) -> anyhow::Result<(Outcome, Option<nixe_capture_core::capture::Shot>)> {
+fn run_cli(action: &Action) -> anyhow::Result<(Outcome, Option<nyx_capture_core::capture::Shot>)> {
     let select = matches!(action.mode, CaptureMode::SelectRegion | CaptureMode::SelectWindow);
     let mut action = action.clone();
     if action.delay > 0 && !overlay::run_countdown_blocking(action.delay) {
@@ -447,7 +447,7 @@ fn run_cli(action: &Action) -> anyhow::Result<(Outcome, Option<nixe_capture_core
     if select && overlay::prefer() {
         match overlay::run_cli(&action) {
             Ok(outcome) => return Ok(outcome),
-            Err(err) => eprintln!("nixe-capture: overlay unavailable ({err}); using slurp"),
+            Err(err) => eprintln!("nyx-capture: overlay unavailable ({err}); using slurp"),
         }
     }
     action::require_tools_for(&action.mode, action.after, action.ocr_mode)?;
@@ -457,11 +457,11 @@ fn run_cli(action: &Action) -> anyhow::Result<(Outcome, Option<nixe_capture_core
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nixe_capture_core::action::After;
+    use nyx_capture_core::action::After;
 
     #[test]
     fn region_copy_is_a_cli_action() {
-        let args = vec!["nixe-capture".into(), "--region".into(), "--copy".into()];
+        let args = vec!["nyx-capture".into(), "--region".into(), "--copy".into()];
         let a = cli_action(&args).expect("action");
         assert!(matches!(a.mode, CaptureMode::SelectRegion));
         assert!(matches!(a.after, After::Copy));
@@ -469,28 +469,28 @@ mod tests {
 
     #[test]
     fn bare_launch_opens_the_window() {
-        let args = vec!["nixe-capture".into()];
+        let args = vec!["nyx-capture".into()];
         assert!(cli_action(&args).is_none());
     }
 
     #[test]
     fn pin_and_edit_are_cli_actions() {
-        let pin = cli_action(&["nixe-capture".into(), "--pin".into()]).expect("pin");
+        let pin = cli_action(&["nyx-capture".into(), "--pin".into()]).expect("pin");
         assert!(matches!(pin.mode, CaptureMode::SelectRegion));
         assert!(matches!(pin.after, After::Pin));
-        let edit = cli_action(&["nixe-capture".into(), "--region".into(), "--edit".into()]).expect("edit");
+        let edit = cli_action(&["nyx-capture".into(), "--region".into(), "--edit".into()]).expect("edit");
         assert!(matches!(edit.after, After::Edit));
     }
 
     #[test]
     fn delay_parses_on_fullscreen() {
-        let a = cli_action(&["nixe-capture".into(), "--fullscreen".into(), "--delay".into(), "3".into(), "--copy".into()]).expect("action");
+        let a = cli_action(&["nyx-capture".into(), "--fullscreen".into(), "--delay".into(), "3".into(), "--copy".into()]).expect("action");
         assert_eq!(a.delay, 3);
         assert!(matches!(a.after, After::Copy));
     }
 
     #[test]
     fn a_missing_bus_name_is_not_the_primary() {
-        assert!(!name_owned("io.github.design_nexus.nixe.Capture.NotRunning"));
+        assert!(!name_owned("io.github.design_nexus.nyx.Capture.NotRunning"));
     }
 }

@@ -1,7 +1,7 @@
 [package]
-name = "nixe-capture-core"
+name = "nyx-capture-core"
 version = "0.1.0"
-description = "Screenshot capture, OCR, and history library for Nixe Capture"
+description = "Screenshot capture, OCR, and history library for Nyx Capture"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true

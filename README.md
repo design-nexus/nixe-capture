@@ -6,11 +6,11 @@ searchable history.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/design-nexus/nixe-capture/main/install.sh | bash -s -- capture
+curl -fsSL https://raw.githubusercontent.com/design-nexus/nyx-capture/main/install.sh | bash -s -- capture
 ```
 
 This installs grim, wl-clipboard, Tesseract (with English) and gtk4-layer-shell if they're
-missing, builds with Cargo, and installs `nixe-capture` and its Glimpse plugin to
+missing, builds with Cargo, and installs `nyx-capture` and its Glimpse plugin to
 `~/.local/bin` with a launcher entry. To remove it, run the same line with `uninstall.sh`
 in place of `install.sh`.
 
@@ -31,9 +31,9 @@ in place of `install.sh`.
 - Select and move a mark, or Delete it. Ctrl+scroll zooms; Ctrl+0 fits.
 - **Redact** reads the shot's text and covers emails, URLs, phone numbers, card numbers,
   addresses and keys with solid boxes; the shot is then marked sensitive (its text isn't
-  indexed and Nixe Assistant isn't given it).
+  indexed and Nyx Assistant isn't given it).
 - The original file is never changed: edits are kept beside it. Everything handed out
-  (copy, save, pin, the history thumbnail, Nixe Assistant) has the edits burned in.
+  (copy, save, pin, the history thumbnail, Nyx Assistant) has the edits burned in.
 
 ## History
 
@@ -67,31 +67,31 @@ once its models are downloaded (Settings → OCR → RapidOCR models).
 ## Usage
 
 ```
-nixe-capture                    History window
-nixe-capture --region           Drag a region, copy the PNG
-nixe-capture --window           Pick a window
-nixe-capture --active-window    The focused window
-nixe-capture --monitor [NAME]   One monitor (the focused one without NAME)
-nixe-capture --fullscreen       The focused monitor
-nixe-capture --delay SECS       Wait first
-nixe-capture --ocr              Region, then copy its text
-nixe-capture --pin              Region, then pin it
-nixe-capture --edit             Region, then the editor
-nixe-capture --copy | --save [PATH]
-nixe-capture --scroll           Scrolling capture (omasnap)
-nixe-capture --record [--region] [--webcam]
-nixe-capture --record --stop | --pause
-nixe-capture --section ID       Open Recent, Starred, or settings
-nixe-capture --toggle           Close the window if it's open, otherwise open it
+nyx-capture                    History window
+nyx-capture --region           Drag a region, copy the PNG
+nyx-capture --window           Pick a window
+nyx-capture --active-window    The focused window
+nyx-capture --monitor [NAME]   One monitor (the focused one without NAME)
+nyx-capture --fullscreen       The focused monitor
+nyx-capture --delay SECS       Wait first
+nyx-capture --ocr              Region, then copy its text
+nyx-capture --pin              Region, then pin it
+nyx-capture --edit             Region, then the editor
+nyx-capture --copy | --save [PATH]
+nyx-capture --scroll           Scrolling capture (omasnap)
+nyx-capture --record [--region] [--webcam]
+nyx-capture --record --stop | --pause
+nyx-capture --section ID       Open Recent, Starred, or settings
+nyx-capture --toggle           Close the window if it's open, otherwise open it
 ```
 
 Suggested Hyprland binds (install doesn't write them):
 
 ```lua
-o.bind("SUPER + SHIFT + S", "Capture region", "nixe-capture --region")
-o.bind("SUPER + SHIFT + W", "Capture window", "nixe-capture --window")
-o.bind("PRINT", "Capture screen", "nixe-capture --fullscreen")
-o.bind("SUPER + SHIFT + O", "Capture text", "nixe-capture --ocr")
+o.bind("SUPER + SHIFT + S", "Capture region", "nyx-capture --region")
+o.bind("SUPER + SHIFT + W", "Capture window", "nyx-capture --window")
+o.bind("PRINT", "Capture screen", "nyx-capture --fullscreen")
+o.bind("SUPER + SHIFT + O", "Capture text", "nyx-capture --ocr")
 ```
 
 | Key | Action |
@@ -118,15 +118,15 @@ H highlighter, T text, N marker, B blur, X pixelate, D solid box, C crop; Delete
 selected mark; Ctrl+Z / Ctrl+Shift+Z undo and redo; Ctrl+C copies; Ctrl+S saves; F1 lists
 them.
 
-## Glimpse and Nixe Assistant
+## Glimpse and Nyx Assistant
 
-`nixe-capture-glimpse` searches history text (and copies it) and runs `capture region`,
-`capture window` and `capture screen`. Nixe Assistant can take a capture, search history,
+`nyx-capture-glimpse` searches history text (and copies it) and runs `capture region`,
+`capture window` and `capture screen`. Nyx Assistant can take a capture, search history,
 read a capture's text and control recording over the session bus (sending it a screenshot
 is off until Settings → Privacy allows it).
 
 ## Files
 
-- History: `~/.local/share/nixe-capture/` (`capture.sqlite` and the captures)
-- Thumbnails: `~/.cache/nixe-capture/thumbs/`
-- Settings: `~/.config/nixe-capture/settings.toml`
+- History: `~/.local/share/nyx-capture/` (`capture.sqlite` and the captures)
+- Thumbnails: `~/.cache/nyx-capture/thumbs/`
+- Settings: `~/.config/nyx-capture/settings.toml`

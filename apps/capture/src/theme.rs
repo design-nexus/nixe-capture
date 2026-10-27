@@ -1,13 +1,13 @@
-//! Theming: the shared Nixe theme engine, given this app's stylesheet.
+//! Theming: the shared Nyx theme engine, given this app's stylesheet.
 
-pub use nixe_theme::*;
+pub use nyx_theme::*;
 
 use crate::prefs;
 use gtk::gdk;
 
 pub fn install() {
     install_icons();
-    nixe_theme::install(Style {
+    nyx_theme::install(Style {
         window_class: "capture-window",
         base_skip: &[],
         css: include_str!("style.css"),

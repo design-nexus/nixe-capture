@@ -108,7 +108,7 @@ pub fn take(req: &CaptureRequest, backend: &str) -> Result<Shot> {
 }
 
 pub fn pick(backend: &str) -> &'static str {
-    if let Ok(forced) = std::env::var("NIXE_CAPTURE_BACKEND") {
+    if let Ok(forced) = std::env::var("NYX_CAPTURE_BACKEND") {
         if forced == "portal" {
             return "portal";
         }
@@ -130,10 +130,10 @@ mod tests {
 
     #[test]
     fn auto_prefers_grim_when_forced() {
-        unsafe { std::env::set_var("NIXE_CAPTURE_BACKEND", "grim") };
+        unsafe { std::env::set_var("NYX_CAPTURE_BACKEND", "grim") };
         assert_eq!(pick("auto"), "grim");
-        unsafe { std::env::set_var("NIXE_CAPTURE_BACKEND", "portal") };
+        unsafe { std::env::set_var("NYX_CAPTURE_BACKEND", "portal") };
         assert_eq!(pick("auto"), "portal");
-        unsafe { std::env::remove_var("NIXE_CAPTURE_BACKEND") };
+        unsafe { std::env::remove_var("NYX_CAPTURE_BACKEND") };
     }
 }

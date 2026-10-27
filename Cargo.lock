@@ -969,7 +969,7 @@ dependencies = [
 [[package]]
 name = "glimpse-plugin-sdk"
 version = "0.1.0"
-source = "git+https://github.com/design-nexus/nixe-glimpse.git?rev=e60055b3b10793646b07bcb8b403ef1c67cdfd01#e60055b3b10793646b07bcb8b403ef1c67cdfd01"
+source = "git+https://github.com/design-nexus/nyx-glimpse.git?rev=6f9f7325259bb05c2bc6a5eb1920ce6caed7aa82#6f9f7325259bb05c2bc6a5eb1920ce6caed7aa82"
 dependencies = [
  "anyhow",
  "serde",
@@ -1722,87 +1722,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
-name = "nixe-capture"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "gtk4",
- "gtk4-layer-shell",
- "image",
- "nixe-capture-core",
- "nixe-core",
- "nixe-theme",
- "nixe-ui",
- "serde",
- "serde_json",
- "toml 1.1.6+spec-1.1.0",
-]
-
-[[package]]
-name = "nixe-capture-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ashpd",
- "cairo-rs",
- "image",
- "libc",
- "ort",
- "pango",
- "pangocairo",
- "rapidocr-core",
- "regex",
- "rusqlite",
- "serde",
- "serde_json",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "nixe-capture-glimpse"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "glimpse-plugin-sdk",
- "nixe-capture-core",
- "serde_json",
-]
-
-[[package]]
-name = "nixe-core"
-version = "0.1.0"
-source = "git+https://github.com/design-nexus/nixe-core.git?rev=87682e6c936b6a4f006639b1a1c099e96346c07c#87682e6c936b6a4f006639b1a1c099e96346c07c"
-dependencies = [
- "anyhow",
- "gtk4",
- "serde",
- "serde_json",
- "toml 1.1.6+spec-1.1.0",
-]
-
-[[package]]
-name = "nixe-theme"
-version = "0.1.0"
-source = "git+https://github.com/design-nexus/nixe-design.git?rev=b8204de80644e263e32783602f2e0ae393578c9e#b8204de80644e263e32783602f2e0ae393578c9e"
-dependencies = [
- "gtk4",
- "nixe-core",
- "serde",
- "toml 1.1.6+spec-1.1.0",
-]
-
-[[package]]
-name = "nixe-ui"
-version = "0.1.0"
-source = "git+https://github.com/design-nexus/nixe-design.git?rev=b8204de80644e263e32783602f2e0ae393578c9e#b8204de80644e263e32783602f2e0ae393578c9e"
-dependencies = [
- "gtk4",
- "nixe-core",
- "nixe-theme",
-]
-
-[[package]]
 name = "no_std_io2"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1909,6 +1828,87 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
+]
+
+[[package]]
+name = "nyx-capture"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gtk4",
+ "gtk4-layer-shell",
+ "image",
+ "nyx-capture-core",
+ "nyx-core",
+ "nyx-theme",
+ "nyx-ui",
+ "serde",
+ "serde_json",
+ "toml 1.1.6+spec-1.1.0",
+]
+
+[[package]]
+name = "nyx-capture-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ashpd",
+ "cairo-rs",
+ "image",
+ "libc",
+ "ort",
+ "pango",
+ "pangocairo",
+ "rapidocr-core",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "nyx-capture-glimpse"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "glimpse-plugin-sdk",
+ "nyx-capture-core",
+ "serde_json",
+]
+
+[[package]]
+name = "nyx-core"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-core.git?rev=52cba5e27a3dd5f00c780f53e423302b4b5f9c9c#52cba5e27a3dd5f00c780f53e423302b4b5f9c9c"
+dependencies = [
+ "anyhow",
+ "gtk4",
+ "serde",
+ "serde_json",
+ "toml 1.1.6+spec-1.1.0",
+]
+
+[[package]]
+name = "nyx-theme"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-design.git?rev=938c638951a53f5874a8276d07ac9dcd68b191ad#938c638951a53f5874a8276d07ac9dcd68b191ad"
+dependencies = [
+ "gtk4",
+ "nyx-core",
+ "serde",
+ "toml 1.1.6+spec-1.1.0",
+]
+
+[[package]]
+name = "nyx-ui"
+version = "0.1.0"
+source = "git+https://github.com/design-nexus/nyx-design.git?rev=938c638951a53f5874a8276d07ac9dcd68b191ad#938c638951a53f5874a8276d07ac9dcd68b191ad"
+dependencies = [
+ "gtk4",
+ "nyx-core",
+ "nyx-theme",
 ]
 
 [[package]]

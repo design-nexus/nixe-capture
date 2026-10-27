@@ -6,8 +6,8 @@ use crate::widgets::{self, Page};
 use crate::window;
 use gtk::gio;
 use gtk::prelude::*;
-use nixe_capture_core::action;
-use nixe_capture_core::detect::Tools;
+use nyx_capture_core::action;
+use nyx_capture_core::detect::Tools;
 use std::path::Path;
 
 pub fn build(page: &Page) {
@@ -22,7 +22,7 @@ pub fn build(page: &Page) {
 
 fn window_group(page: &Page) {
     let group = page.group("Capture window");
-    group.add(&nixe_ui::widgets::start_row());
+    group.add(&nyx_ui::widgets::start_row());
     let prefs = prefs::get();
     let options: Vec<(String, String)> = theme::all().iter().map(|t| (t.id.clone(), t.name.clone())).collect();
     let (theme_row, theme_dd) =
@@ -82,7 +82,7 @@ fn capture_group(page: &Page) {
     let save_label = save_dir_label(&prefs.save_dir);
     let (row, _) = widgets::button_row(
         "Save folder",
-        "Where Save writes PNG files. Empty uses Pictures / Nixe Capture.",
+        "Where Save writes PNG files. Empty uses Pictures / Nyx Capture.",
         &save_label,
         |btn| choose_save_dir(btn.clone()),
     );
@@ -123,7 +123,7 @@ fn capture_group(page: &Page) {
 
 fn save_dir_label(dir: &str) -> String {
     if dir.is_empty() {
-        return "Pictures / Nixe Capture".into();
+        return "Pictures / Nyx Capture".into();
     }
     Path::new(dir)
         .file_name()
@@ -176,7 +176,7 @@ fn privacy_group(page: &Page) {
     let prefs = prefs::get();
     let (row, _) = widgets::switch_row(
         "Assistant can send a screenshot",
-        "Let Nixe Assistant capture the screen or read OCR from history while Capture is open. Off by default.",
+        "Let Nyx Assistant capture the screen or read OCR from history while Capture is open. Off by default.",
         prefs.assistant_can_send,
         |on| prefs::update(|p| p.assistant_can_send = on),
     );
@@ -211,7 +211,7 @@ fn ocr_group(page: &Page) {
     });
     group.add(&row);
     // Tesseract's installed languages (more come as tesseract-data-* packages).
-    let mut langs = nixe_capture_core::ocr::tesseract_languages();
+    let mut langs = nyx_capture_core::ocr::tesseract_languages();
     if !langs.contains(&prefs.ocr_langs) {
         langs.insert(0, prefs.ocr_langs.clone());
     }
@@ -226,7 +226,7 @@ fn ocr_group(page: &Page) {
         );
         group.add(&row);
     }
-    let present = nixe_capture_core::ocr::models_present();
+    let present = nyx_capture_core::ocr::models_present();
     let get = widgets::icon_button("folder-download-symbolic", "Download the RapidOCR models");
     get.set_visible(!present);
     let state = widgets::label(if present { "Installed" } else { "Not downloaded" }, "dim");
@@ -237,7 +237,7 @@ fn ocr_group(page: &Page) {
         b.set_sensitive(false);
         state.set_text("Downloading…");
         let (b, state) = (b.clone(), state.clone());
-        crate::cmd::background(nixe_capture_core::ocr::download_models, move |result| match result {
+        crate::cmd::background(nyx_capture_core::ocr::download_models, move |result| match result {
             Ok(()) => {
                 state.set_text("Installed");
                 b.set_visible(false);
@@ -337,7 +337,7 @@ fn record_group(page: &Page) {
             &prefs.record_webcam_size,
             |v| prefs::update(|p| p.record_webcam_size = v),
         ));
-        let devices = nixe_capture_core::webcam::list_devices();
+        let devices = nyx_capture_core::webcam::list_devices();
         if !devices.is_empty() {
             let mut opts = vec![("".into(), "First camera".into())];
             for d in devices {

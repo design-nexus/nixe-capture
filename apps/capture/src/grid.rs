@@ -11,7 +11,7 @@ use gtk::gdk;
 use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
-use nixe_capture_core::store::{self, CaptureRow, THUMB_EDGE};
+use nyx_capture_core::store::{self, CaptureRow, THUMB_EDGE};
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 
@@ -577,7 +577,7 @@ pub fn drop_texture(id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nixe_capture_core::store::CaptureKind;
+    use nyx_capture_core::store::CaptureKind;
 
     fn row(id: &str, created_at: i64) -> CaptureRow {
         CaptureRow {

@@ -1,6 +1,6 @@
-//! Nixe-style building blocks.
+//! Nyx-style building blocks.
 
-pub use nixe_ui::widgets::*;
+pub use nyx_ui::widgets::*;
 
 use gtk::prelude::*;
 

@@ -2,8 +2,8 @@
   "application": "capture",
   "directory": "capture",
   "packages": [
-    "nixe-capture",
-    "nixe-capture-glimpse"
+    "nyx-capture",
+    "nyx-capture-glimpse"
   ],
   "manifest": "Cargo.toml",
   "prepare": [],
@@ -14,9 +14,9 @@
       "test",
       "--locked",
       "-p",
-      "nixe-capture",
+      "nyx-capture",
       "--bin",
-      "nixe-capture"
+      "nyx-capture"
     ]
   ]
 }

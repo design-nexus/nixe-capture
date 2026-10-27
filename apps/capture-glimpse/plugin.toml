@@ -1,8 +1,8 @@
-id = "nixe-capture"
+id = "nyx-capture"
 name = "Capture"
 version = "0.1.0"
 api_version = 1
-exec = ["./nixe-capture-glimpse"]
+exec = ["./nyx-capture-glimpse"]
 capabilities = ["search", "preview", "reader"]
 file_types = ["png"]
 description = "Search screenshot history and OCR text on this computer. Try capture, capture starred, capture region, or words from a shot. PNG files in a Glimpse source use stored OCR for semantic search."

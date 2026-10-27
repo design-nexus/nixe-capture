@@ -9,12 +9,12 @@ use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
 use image::RgbaImage;
-use nixe_capture_core::annot::{self, Colour, EditState, History, Mark, NormRect};
-use nixe_capture_core::capture::Shot;
-use nixe_capture_core::export;
-use nixe_capture_core::ocr::{OcrMode, recognize};
-use nixe_capture_core::store;
-use nixe_capture_core::clipboard;
+use nyx_capture_core::annot::{self, Colour, EditState, History, Mark, NormRect};
+use nyx_capture_core::capture::Shot;
+use nyx_capture_core::export;
+use nyx_capture_core::ocr::{OcrMode, recognize};
+use nyx_capture_core::store;
+use nyx_capture_core::clipboard;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -509,9 +509,9 @@ impl Editor {
         // The Save folder from Settings, or Pictures/Screenshots.
         let dir = prefs::get().save_dir;
         let path = if dir.is_empty() {
-            nixe_capture_core::action::default_save_path()
+            nyx_capture_core::action::default_save_path()
         } else {
-            nixe_capture_core::action::save_path_in(std::path::Path::new(&dir))
+            nyx_capture_core::action::save_path_in(std::path::Path::new(&dir))
         };
         let me = self.clone();
         crate::cmd::background(
@@ -547,7 +547,7 @@ impl Editor {
             move || {
                 let img = image::DynamicImage::ImageRgba8(original);
                 let r = recognize(&img, mode, &langs)?;
-                let added = nixe_capture_core::redact::marks(&r, img.width(), img.height());
+                let added = nyx_capture_core::redact::marks(&r, img.width(), img.height());
                 anyhow::Ok((added, id, r.text))
             },
             move |result| match result {

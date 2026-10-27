@@ -1,6 +1,6 @@
-# Nixe Capture
+# Nyx Capture
 
-Native screenshot, annotation, OCR, and (later) screen recording for the Nixe suite. Repository is the existing workspace `design-nexus/nixe` at `/home/ken/Projects/nixe`. Capture is a new app in that workspace, not a new repository and not a fork of Flameshot, ShareX, or Satty.
+Native screenshot, annotation, OCR, and (later) screen recording for the Nyx suite. Repository is the existing workspace `design-nexus/nyx` at `/home/ken/Projects/nyx`. Capture is a new app in that workspace, not a new repository and not a fork of Flameshot, ShareX, or Satty.
 
 Phase 1 is the only implementation this plan authorizes. Later phases are specified so crate boundaries and the SQLite schema do not have to be rewritten. They stay unbuilt until the previous phase is accepted.
 
@@ -8,21 +8,21 @@ Phase 1 is the only implementation this plan authorizes. Later phases are specif
 
 ## Decisions from the existing tree
 
-`STYLE.md` in [nixe-design](https://github.com/design-nexus/nixe-design) is the visual contract. Music (`apps/music/src/window.rs`) is the sidebar reference. Settings is the settings-card reference. Photos (`apps/gallery/src/edit/`) is the annotation-object reference. Shared behavior comes from `nixe-core`, `nixe-theme`, `nixe-ui`, and `nixe-icons`. Every current app is GTK 4 (`gtk4` 0.11, feature `v4_18`) with no libadwaita and no WebKit. Capture follows that.
+`STYLE.md` in [nyx-design](https://github.com/design-nexus/nyx-design) is the visual contract. Music (`apps/music/src/window.rs`) is the sidebar reference. Settings is the settings-card reference. Photos (`apps/gallery/src/edit/`) is the annotation-object reference. Shared behavior comes from `nyx-core`, `nyx-theme`, `nyx-ui`, and `nyx-icons`. Every current app is GTK 4 (`gtk4` 0.11, feature `v4_18`) with no libadwaita and no WebKit. Capture follows that.
 
-There is no Nixe Drive app and no Nixe Clipboard app. Clipboard is GTK plus `wl-copy`/`wl-paste` (Chat) or `wl-clipboard-rs` (Passwords). Drive sharing is a Phase 3 placeholder that does not invent a storage API.
+There is no Nyx Drive app and no Nyx Clipboard app. Clipboard is GTK plus `wl-copy`/`wl-paste` (Chat) or `wl-clipboard-rs` (Passwords). Drive sharing is a Phase 3 placeholder that does not invent a storage API.
 
-Assistant integration today is per-app D-Bus via `nixe_core::control` (`Describe` / `Call` on `io.github.design_nexus.nixe.Control`). Handlers run on the GTK thread; long work uses `serve_async` the way News and Music do. Assistant already has a separate sandboxed ability (`apps/assistant/abilities/capture`) that shells out to `grim` and `tesseract`. That ability is not replaced in Phase 1. Changing Assistant needs an explicit yes.
+Assistant integration today is per-app D-Bus via `nyx_core::control` (`Describe` / `Call` on `io.github.design_nexus.nyx.Control`). Handlers run on the GTK thread; long work uses `serve_async` the way News and Music do. Assistant already has a separate sandboxed ability (`apps/assistant/abilities/capture`) that shells out to `grim` and `tesseract`. That ability is not replaced in Phase 1. Changing Assistant needs an explicit yes.
 
-Glimpse plugins are sandboxed JSON-lines processes (`apps/glimpse/PLUGIN_API.md`, `crates/glimpse-plugin-sdk`). They search and return plain text. They do not embed GTK. News already has the sandbox exception for a library under `~/.local/share` (`bind_news_library` in `apps/glimpse/src/plugins.rs`). Capture needs the same pattern for `nixe-capture`.
+Glimpse plugins are sandboxed JSON-lines processes (`apps/glimpse/PLUGIN_API.md`, `crates/glimpse-plugin-sdk`). They search and return plain text. They do not embed GTK. News already has the sandbox exception for a library under `~/.local/share` (`bind_news_library` in `apps/glimpse/src/plugins.rs`). Capture needs the same pattern for `nyx-capture`.
 
 SQLite in this repo is `rusqlite` 0.40 with `bundled`. News FTS5 uses `tokenize='unicode61'` with content tables and insert/delete/update triggers. Capture copies that shape.
 
-Theme, density, text size, and “open on” already live in `~/.config/nixe/theme.toml`. Capture does not invent a second theme store.
+Theme, density, text size, and “open on” already live in `~/.config/nyx/theme.toml`. Capture does not invent a second theme store.
 
 Omarchy already ships capture scripts (`omarchy-capture-screenshot` → `omasnap`, `omarchy-capture-region` + `slurp`/`hyprpicker`, `omarchy-capture-text` → grim+tesseract, `omarchy-capture-screenrecording` → gpu-screen-recorder with wf-recorder fallback). Settings → Capture currently launches those scripts. Capture does not wrap them as the product. They remain the Omarchy fallback until Ken asks Settings to switch. This plan does not edit Settings, Assistant, Chat, Photos, or Glimpse except the one-line Capture library bind that News already established as the plugin pattern.
 
-Photos already implements object markup (pen, highlighter, arrow, rectangle, ellipse, text, pixelate, crop, undo/redo) with normalised coordinates and Cairo. Phase 1 copies that model into `nixe-capture-core` rather than extracting Photos into a shared crate.
+Photos already implements object markup (pen, highlighter, arrow, rectangle, ellipse, text, pixelate, crop, undo/redo) with normalised coordinates and Cairo. Phase 1 copies that model into `nyx-capture-core` rather than extracting Photos into a shared crate.
 
 ---
 
@@ -30,16 +30,16 @@ Photos already implements object markup (pen, highlighter, arrow, rectangle, ell
 
 | | |
 | --- | --- |
-| Package | `nixe-capture` |
-| Binary | `nixe-capture` |
+| Package | `nyx-capture` |
+| Binary | `nyx-capture` |
 | Helper | same binary, fast CLI modes that skip the history window |
-| App id | `io.github.design_nexus.nixe.Capture` |
-| Pin id | `io.github.design_nexus.nixe.Capture.Pin` |
-| Slug | `nixe-capture` via `nixe_core::app::init` |
-| Config | `~/.config/nixe-capture/settings.toml` |
-| Library | `~/.local/share/nixe-capture/capture.sqlite` |
-| Files | `~/.local/share/nixe-capture/captures/{id}.png` plus `{id}.ann.json` |
-| Cache | `~/.cache/nixe-capture/` (thumbnails, RapidOCR models) |
+| App id | `io.github.design_nexus.nyx.Capture` |
+| Pin id | `io.github.design_nexus.nyx.Capture.Pin` |
+| Slug | `nyx-capture` via `nyx_core::app::init` |
+| Config | `~/.config/nyx-capture/settings.toml` |
+| Library | `~/.local/share/nyx-capture/capture.sqlite` |
+| Files | `~/.local/share/nyx-capture/captures/{id}.png` plus `{id}.ann.json` |
+| Cache | `~/.cache/nyx-capture/` (thumbnails, RapidOCR models) |
 | Window | Music’s frame for History: sidebar, toolbar, virtualized grid, status bar, settings card. Default 1120×800, tiled. Overlay and pins are separate surfaces. |
 
 Sidebar groups, in order:
@@ -58,16 +58,16 @@ Core capture works with history off, OCR off, recording unbuilt, and no network.
 ## Crate layout
 
 ```
-crates/nixe-capture-core/     # no GTK
+crates/nyx-capture-core/     # no GTK
 apps/capture/                 # GTK overlay, editor, history, pins
 apps/capture-glimpse/         # GTK-free Glimpse plugin
 ```
 
-A second repository would duplicate edition, license, and CI for a library only Nixe apps link. The workspace already discovers `apps/*` and `crates/*`.
+A second repository would duplicate edition, license, and CI for a library only Nyx apps link. The workspace already discovers `apps/*` and `crates/*`.
 
-### `nixe-capture-core`
+### `nyx-capture-core`
 
-No GTK. Unit-tested with the `nixe-test` identity.
+No GTK. Unit-tested with the `nyx-test` identity.
 
 | Module | Role |
 | --- | --- |
@@ -126,7 +126,7 @@ pub trait Recorder {
 
 Capability flags hide unsupported settings. The GTK app never offers a control whose backend is missing.
 
-### `nixe-capture` (GTK)
+### `nyx-capture` (GTK)
 
 | File | Role |
 | --- | --- |
@@ -143,13 +143,13 @@ Capability flags hide unsupported settings. The GTK app never offers a control w
 | `paths.rs`, `cmd.rs`, `theme.rs`, `widgets.rs` | Re-exports plus app-only bits. |
 | `cmd.rs` (`background`) | Worker threads for OCR, thumbnails, encode, slurp. GTK never waits. |
 
-Cold-start path: `nixe-capture --region` builds the overlay only. History window, RapidOCR, and SQLite open after the shot is accepted (or never, if history is off and the user copies then quits).
+Cold-start path: `nyx-capture --region` builds the overlay only. History window, RapidOCR, and SQLite open after the shot is accepted (or never, if history is off and the user copies then quits).
 
-### `nixe-capture-glimpse`
+### `nyx-capture-glimpse`
 
-GTK-free. Opens `capture.sqlite` read-only (`query_only`). Capabilities `search` and `preview`. Actions: copy OCR text, or `activate` tokens that the host turns into open/copy. Commands in search: `capture region`, `capture window`, `capture screen` return hits whose `activate` token is `region` / `window` / `fullscreen`. The plugin cannot spawn GTK; activate is handled by launching `nixe-capture --region` on the host side through the existing `Action::Open`/`Activate` path, documented in PLUGIN_API.md.
+GTK-free. Opens `capture.sqlite` read-only (`query_only`). Capabilities `search` and `preview`. Actions: copy OCR text, or `activate` tokens that the host turns into open/copy. Commands in search: `capture region`, `capture window`, `capture screen` return hits whose `activate` token is `region` / `window` / `fullscreen`. The plugin cannot spawn GTK; activate is handled by launching `nyx-capture --region` on the host side through the existing `Action::Open`/`Activate` path, documented in PLUGIN_API.md.
 
-Glimpse sandbox: add `bind_capture_library` next to `bind_news_library`, plugin id exactly `nixe-capture`, mount `$XDG_DATA_HOME/nixe-capture` at `/capture-library`, set `NIXE_CAPTURE_DB=/capture-library/capture.sqlite`. That is a one-function change in Glimpse, the same exception News already has. Ask before landing it.
+Glimpse sandbox: add `bind_capture_library` next to `bind_news_library`, plugin id exactly `nyx-capture`, mount `$XDG_DATA_HOME/nyx-capture` at `/capture-library`, set `NYX_CAPTURE_DB=/capture-library/capture.sqlite`. That is a one-function change in Glimpse, the same exception News already has. Ask before landing it.
 
 ---
 
@@ -161,7 +161,7 @@ Glimpse sandbox: add `bind_capture_library` next to `bind_news_library`, plugin 
 | --- | --- | --- | --- |
 | **grim** | Primary capture | Hyprland/wlroots only; needs geometry string; scale mismatch | Already used by Chat, Assistant desktop, Omarchy. Reuse `Shot` scale mapping. |
 | **GTK4 overlay** | Region/window UI | Layer Shell not on every compositor; exclusive keyboard grab | `gtk4-layer-shell` 0.8.x (matches gtk4 0.11). Probe `is_supported()`. Fallback: slurp. |
-| **slurp** | Region fallback | No magnifier, no Nixe chrome | Acceptable fallback. Same geometry format grim already takes. |
+| **slurp** | Region fallback | No magnifier, no Nyx chrome | Acceptable fallback. Same geometry format grim already takes. |
 | **hyprctl clients/monitors** | Window and monitor lists | Hyprland-only | Capability-gated. Active window = focused client. |
 | **ashpd Screenshot portal** | Cross-desktop | Interactive dialog, slow, may refuse region | Last resort when grim is absent. Interactive=false when the portal allows it. |
 | **Direct screencopy** | Future | Protocol churn, buffer formats, DMA-BUF | Not in Phase 1–2. |
@@ -240,7 +240,7 @@ Mode default: `Automatic`.
 
 Settings: Automatic / Tesseract only / RapidOCR only. Copy text from the OCR view. FTS5 indexes the chosen text for Glimpse.
 
-Calibrate thresholds on a fixture set of UI screenshots, terminal text, small fonts, and photos of paper. Store fixtures under `crates/nixe-capture-core/tests/ocr/` (synthetic images, no third-party screenshots in git if license is unclear).
+Calibrate thresholds on a fixture set of UI screenshots, terminal text, small fonts, and photos of paper. Store fixtures under `crates/nyx-capture-core/tests/ocr/` (synthetic images, no third-party screenshots in git if license is unclear).
 
 ---
 
@@ -248,7 +248,7 @@ Calibrate thresholds on a fixture set of UI screenshots, terminal text, small fo
 
 ### Overlay (layer shell)
 
-- Layer `Overlay`, anchors all edges, `KeyboardMode::Exclusive`, namespace `nixe-capture`.
+- Layer `Overlay`, anchors all edges, `KeyboardMode::Exclusive`, namespace `nyx-capture`.
 - Background: the grim still, then `@veil`.
 - Selection: 1 px `@accent` stroke, `@nav_active` fill at low alpha.
 - Chrome: dimension chip and magnifier only. No title bar, no libadwaita header.
@@ -270,10 +270,10 @@ Blur/pixelate stay objects until export; preview uses the Photos pipeline (pixel
 
 ### Pins
 
-`gtk::ApplicationWindow` with class `io.github.design_nexus.nixe.Capture.Pin`. `install.sh` writes `~/.config/hypr/nixe.lua`:
+`gtk::ApplicationWindow` with class `io.github.design_nexus.nyx.Capture.Pin`. `install.sh` writes `~/.config/hypr/nyx.lua`:
 
 ```
-o.window("^io\\.github\\.design_nexus\\.nixe\\.Capture\\.Pin$", { float = true, pin = true, size = { 480, 320 } })
+o.window("^io\\.github\\.design_nexus\\.nyx\\.Capture\\.Pin$", { float = true, pin = true, size = { 480, 320 } })
 ```
 
 Opacity slider, scroll-wheel resize, Esc or click-x dismisses. On compositors without pin, the window is a normal float.
@@ -316,18 +316,18 @@ CREATE VIRTUAL TABLE captures_fts USING fts5(
 ## CLI and IPC
 
 ```
-nixe-capture                 # history window
-nixe-capture --region
-nixe-capture --window
-nixe-capture --active-window
-nixe-capture --monitor [NAME]
-nixe-capture --fullscreen
-nixe-capture --delay SECS
-nixe-capture --ocr           # region then copy text
-nixe-capture --pin
-nixe-capture --copy|--save|--edit
-nixe-capture --section recent|starred|settings
-nixe-capture --toggle
+nyx-capture                 # history window
+nyx-capture --region
+nyx-capture --window
+nyx-capture --active-window
+nyx-capture --monitor [NAME]
+nyx-capture --fullscreen
+nyx-capture --delay SECS
+nyx-capture --ocr           # region then copy text
+nyx-capture --pin
+nyx-capture --copy|--save|--edit
+nyx-capture --section recent|starred|settings
+nyx-capture --toggle
 ```
 
 GApplication: a second invocation reaches the primary. Overlay requests still run even if History is open.
@@ -339,9 +339,9 @@ Control tools (while open):
 - `capture.open` `{id}`
 - `capture.ocr_text` `{id}` (returns stored OCR; does not recapture)
 
-Nothing deletes. Export uses `nixe_core::control::save_target`.
+Nothing deletes. Export uses `nyx_core::control::save_target`.
 
-Hyprland binds stay in the user’s hypr config. Document suggested binds. Do not edit `/usr/share/omarchy` or `~/.config/hypr/hyprland.lua` except `nixe.lua` via `install.sh`.
+Hyprland binds stay in the user’s hypr config. Document suggested binds. Do not edit `/usr/share/omarchy` or `~/.config/hypr/hyprland.lua` except `nyx.lua` via `install.sh`.
 
 ---
 
@@ -351,7 +351,7 @@ Hyprland binds stay in the user’s hypr config. Document suggested binds. Do no
 - `sidebar_collapsed`
 - `last_section`
 - `after_capture`: `edit` | `copy` | `save` | `pin`
-- `save_dir` (default XDG Pictures / Nixe Capture)
+- `save_dir` (default XDG Pictures / Nyx Capture)
 - `history`: bool, default true
 - `retention_days`: i64, default 90, 0 = keep
 - `ocr_mode`: `automatic` | `tesseract` | `rapidocr`
@@ -368,17 +368,17 @@ Recording keys appear in Phase 2 and are omitted from the card until a recorder 
 
 | Existing | Use |
 | --- | --- |
-| `nixe-core` | identity, XDG, prefs, cmd, control, atomic writes |
-| `nixe-theme` / `nixe-ui` / `nixe-icons` | look, chrome, settings card, icon template |
+| `nyx-core` | identity, XDG, prefs, cmd, control, atomic writes |
+| `nyx-theme` / `nyx-ui` / `nyx-icons` | look, chrome, settings card, icon template |
 | Photos `edit/marks.rs` + `pipeline.rs` | annotation objects, Cairo draw, blur/pixelate order |
 | Assistant `screen.rs` | grim geometry, scale, layout↔image |
 | Chat `composer.rs` screenshot | grim `-g` + slurp cancel handling |
 | News store + FTS5 + glimpse plugin | schema/triggers/plugin/sandbox bind |
-| `install.sh` / `bin/nixe` / `uninstall.sh` | add `capture` to `ALL`, deps, glimpse plugin copy, nixe.lua pin rule |
+| `install.sh` / `bin/nyx` / `uninstall.sh` | add `capture` to `ALL`, deps, glimpse plugin copy, nyx.lua pin rule |
 | Omarchy gpu-screen-recorder path | Phase 2 recorder detection, not Phase 1 UI |
 | Music `window.rs` | sidebar hexpand false, compact, search, F1 |
 
-Do not reuse Omarchy’s slurp+hyprpicker overlay as the Nixe selector. Do not extract Photos in Phase 1. Do not teach Chat to call Capture unless asked.
+Do not reuse Omarchy’s slurp+hyprpicker overlay as the Nyx selector. Do not extract Photos in Phase 1. Do not teach Chat to call Capture unless asked.
 
 ---
 
@@ -387,11 +387,11 @@ Do not reuse Omarchy’s slurp+hyprpicker overlay as the Nixe selector. Do not e
 `install.sh` `app_info` entry:
 
 - ids `Capture`
-- bins `nixe-capture nixe-capture-glimpse`
+- bins `nyx-capture nyx-capture-glimpse`
 - deps `grim tesseract gtk4-layer-shell tesseract-data-eng`
 - optional at runtime: `slurp`, `hyprpicker`, portal backends, RapidOCR models (downloaded into cache on first fallback, or shipped as a data file if license allows)
 
-`ALL` arrays in `install.sh`, `uninstall.sh`, and `bin/nixe`. Icon glyph in `nixe-icons/make_icons.py`. Desktop file `io.github.design_nexus.nixe.Capture.desktop`. App `install.sh`/`uninstall.sh` wrappers like News.
+`ALL` arrays in `install.sh`, `uninstall.sh`, and `bin/nyx`. Icon glyph in `nyx-icons/make_icons.py`. Desktop file `io.github.design_nexus.nyx.Capture.desktop`. App `install.sh`/`uninstall.sh` wrappers like News.
 
 ---
 
@@ -411,9 +411,9 @@ Accept: grim region round-trip documented; overlay draws; both OCR engines produ
 
 ### M1 — Core crate + CLI capture
 
-`nixe-capture-core` + `nixe-capture --fullscreen|--region|--monitor|--active-window` using grim/slurp, PNG to stdout or a temp file, `--copy` via `wl-copy`. No history UI.
+`nyx-capture-core` + `nyx-capture --fullscreen|--region|--monitor|--active-window` using grim/slurp, PNG to stdout or a temp file, `--copy` via `wl-copy`. No history UI.
 
-Accept: `nixe-capture --region --copy` puts a PNG on the clipboard. Cancel is silent.
+Accept: `nyx-capture --region --copy` puts a PNG on the clipboard. Cancel is silent.
 
 ### M2 — Overlay selector
 
@@ -455,17 +455,17 @@ gpu-screen-recorder / wf-recorder / wl-screenrec / portal+PipeWire. System audio
 
 Assistant send-screenshot (authorization switch, like News `assistant_can_subscribe`). Intelligent redaction. Glimpse semantic search (Glimpse already has embeddings). Tutorial capture. Scrolling capture only if a backend exists (omasnap scroll today). Drive sharing when Drive exists. No cloud in core.
 
-Landed on this machine: `assistant_can_send` (default off) gates `capture.send_screenshot`. Editor Redact covers OCR line boxes with solid boxes (email/URL/phone/Luhn card/IPv4/`sk_|pk_|ghp_|github_pat_`) and marks the row sensitive, which drops FTS OCR and the `.ocr.txt` sidecar. Glimpse reader extracts stored OCR for PNGs and skips sensitive shots. `nixe-capture --scroll` wraps `omasnap --scroll --save`. Tutorial is a first-run dialog. Drive is skipped — no Drive app. Assistant’s grim ability is unchanged.
+Landed on this machine: `assistant_can_send` (default off) gates `capture.send_screenshot`. Editor Redact covers OCR line boxes with solid boxes (email/URL/phone/Luhn card/IPv4/`sk_|pk_|ghp_|github_pat_`) and marks the row sensitive, which drops FTS OCR and the `.ocr.txt` sidecar. Glimpse reader extracts stored OCR for PNGs and skips sensitive shots. `nyx-capture --scroll` wraps `omasnap --scroll --save`. Tutorial is a first-run dialog. Drive is skipped — no Drive app. Assistant’s grim ability is unchanged.
 
 ---
 
 ## Testing
 
 ```sh
-cargo test -p nixe-capture-core
-cargo test -p nixe-capture
-cargo test -p nixe-capture-glimpse
-cargo clippy -p nixe-capture-core -p nixe-capture -p nixe-capture-glimpse --all-targets -- -D warnings
+cargo test -p nyx-capture-core
+cargo test -p nyx-capture
+cargo test -p nyx-capture-glimpse
+cargo clippy -p nyx-capture-core -p nyx-capture -p nyx-capture-glimpse --all-targets -- -D warnings
 ```
 
 Core tests: geometry scale, FTS query quoting (copy News `search.rs`), retention, OCR quality decisions with synthetic images, backend capability flags, annotation round-trip JSON.
@@ -482,7 +482,7 @@ Do not claim UI done without exercising overlay → editor → copy on this desk
 
 | Path | Target |
 | --- | --- |
-| Cold `nixe-capture --region` to overlay visible | < 150 ms after grim returns |
+| Cold `nyx-capture --region` to overlay visible | < 150 ms after grim returns |
 | grim itself | whatever the box does; log it in M0 |
 | Idle history window | no RapidOCR, no recorder |
 | RapidOCR first load | async; UI stays usable |
@@ -494,7 +494,7 @@ No persistent capture daemon.
 
 ## Out of scope until asked
 
-- Editing Settings to call `nixe-capture` instead of `omarchy-capture-*`
+- Editing Settings to call `nyx-capture` instead of `omarchy-capture-*`
 - Replacing Assistant’s `abilities/capture` plugin
 - Teaching Chat `--screenshot` to use Capture
 - Extracting Photos’ editor into a shared crate

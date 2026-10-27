@@ -9,15 +9,15 @@ use gtk::gdk;
 use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
-use nixe_capture_core::action::{self, Action, After};
-use nixe_capture_core::annot;
-use nixe_capture_core::capture::CaptureMode;
-use nixe_capture_core::clipboard;
-use nixe_capture_core::ocr::{OcrMode, recognize};
-use nixe_capture_core::record::{self, Container, RecordRequest, Target};
-use nixe_capture_core::search::View;
-use nixe_capture_core::store::{self, CaptureKind, CaptureRow};
-use nixe_ui::chrome;
+use nyx_capture_core::action::{self, Action, After};
+use nyx_capture_core::annot;
+use nyx_capture_core::capture::CaptureMode;
+use nyx_capture_core::clipboard;
+use nyx_capture_core::ocr::{OcrMode, recognize};
+use nyx_capture_core::record::{self, Container, RecordRequest, Target};
+use nyx_capture_core::search::View;
+use nyx_capture_core::store::{self, CaptureKind, CaptureRow};
+use nyx_ui::chrome;
 use serde_json::{Value, json};
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
@@ -102,7 +102,7 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
         Some("settings") => settings_dialog::open(),
         Some(other) => navigate(view_from_section(other)),
         None => {
-            let start = nixe_theme::start_page("recent", &prefs::get().last_section);
+            let start = nyx_theme::start_page("recent", &prefs::get().last_section);
             navigate(view_from_section(&start));
         }
     }
@@ -206,10 +206,10 @@ pub fn send_screenshot(id: &str) -> Result<Value, String> {
     }
     let text = db.ocr_text(id).map_err(|e| e.to_string())?.unwrap_or_default();
     // An edited shot goes out as edited (its blurs and boxes burned in), never the original.
-    let path = if nixe_capture_core::export::is_edited(&row.path) {
+    let path = if nyx_capture_core::export::is_edited(&row.path) {
         let out = paths::thumbs_dir().with_file_name("shared").join(format!("{id}.png"));
         std::fs::create_dir_all(out.parent().unwrap_or(&out)).map_err(|e| e.to_string())?;
-        nixe_capture_core::export::write_flat(&row.path, &out).map_err(|e| e.to_string())?;
+        nyx_capture_core::export::write_flat(&row.path, &out).map_err(|e| e.to_string())?;
         out
     } else {
         row.path.clone()
@@ -222,7 +222,7 @@ pub fn start_scroll() {
         toast("Stop the recording first");
         return;
     }
-    if !nixe_capture_core::scroll::available() {
+    if !nyx_capture_core::scroll::available() {
         toast("Scrolling capture needs omasnap");
         return;
     }
@@ -231,10 +231,10 @@ pub fn start_scroll() {
     let dir = if prefs::get().history {
         paths::captures_dir()
     } else {
-        nixe_capture_core::action::default_save_path().parent().map(PathBuf::from).unwrap_or_else(paths::captures_dir)
+        nyx_capture_core::action::default_save_path().parent().map(PathBuf::from).unwrap_or_else(paths::captures_dir)
     };
     crate::cmd::background(
-        move || nixe_capture_core::scroll::capture(&dir),
+        move || nyx_capture_core::scroll::capture(&dir),
         |result| match result {
             Ok(path) => ingest_scroll(path),
             Err(err) => toast(&err.to_string()),
@@ -333,7 +333,7 @@ pub fn export_id(id: &str, dest: &std::path::Path) -> anyhow::Result<Value> {
         }
         std::fs::copy(&row.path, dest)?;
     } else {
-        nixe_capture_core::export::write_flat(&row.path, dest)?;
+        nyx_capture_core::export::write_flat(&row.path, dest)?;
     }
     Ok(json!({"path": dest.display().to_string(), "id": id}))
 }
@@ -403,10 +403,10 @@ fn build(app: &gtk::Application) {
     let window = gtk::ApplicationWindow::builder().application(app).title("Capture").default_width(1120).default_height(800).build();
     window.add_css_class("capture-window");
     window.set_titlebar(Some(&gtk::Box::new(gtk::Orientation::Horizontal, 0)));
-    window.set_icon_name(Some("io.github.design_nexus.nixe.Capture"));
-    nixe_ui::keys::install(
+    window.set_icon_name(Some("io.github.design_nexus.nyx.Capture"));
+    nyx_ui::keys::install(
         &window,
-        nixe_ui::keys::Common {
+        nyx_ui::keys::Common {
             settings: Some(settings_dialog::open),
             shortcuts: Some(show_shortcuts),
             close: true,
@@ -461,7 +461,7 @@ fn build(app: &gtk::Application) {
 
     let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     toolbar.add_css_class("toolbar");
-    let tools = nixe_capture_core::detect::Tools::probe();
+    let tools = nyx_capture_core::detect::Tools::probe();
     if tools.grim {
         let region = widgets::icon_button("capture-region-symbolic", "Capture a region (Ctrl+N)");
         region.add_css_class("suggested-action");
@@ -615,7 +615,7 @@ pub fn capture_with(mode: CaptureMode, after: After, delay: u32) {
 
 /// [`capture_with`], saving to `save_path` (from `--save PATH`) instead of the Save folder.
 pub fn capture_with_path(mode: CaptureMode, after: After, delay: u32, save_path: Option<PathBuf>) {
-    let title = nixe_capture_core::select::capture_title();
+    let title = nyx_capture_core::select::capture_title();
     LAST_TITLE.with(|t| *t.borrow_mut() = title);
     let win = window();
     // Hyprland doesn't minimize; hide the window so it isn't in its own shot (the
@@ -668,7 +668,7 @@ fn begin_capture(
     let backend = prefs::get().backend;
     let use_overlay = matches!(mode, CaptureMode::SelectRegion | CaptureMode::SelectWindow)
         && crate::overlay::prefer()
-        && nixe_capture_core::capture::pick(&backend) != "portal";
+        && nyx_capture_core::capture::pick(&backend) != "portal";
     if use_overlay {
         let restore = restore.clone();
         glib::timeout_add_local_once(std::time::Duration::from_millis(250), move || {
@@ -718,7 +718,7 @@ fn save_file() -> Option<PathBuf> {
 }
 
 fn finish_shot(
-    shot: nixe_capture_core::capture::Shot,
+    shot: nyx_capture_core::capture::Shot,
     after: After,
     langs: String,
     ocr_mode: OcrMode,
@@ -805,7 +805,7 @@ fn start_overlay(mode: CaptureMode, after: After, langs: String, ocr_mode: OcrMo
     );
 }
 
-fn remember(shot: &nixe_capture_core::capture::Shot) {
+fn remember(shot: &nyx_capture_core::capture::Shot) {
     if !prefs::get().history {
         return;
     }
@@ -911,7 +911,7 @@ pub fn stop_recording() {
 }
 
 fn begin_record(region: bool) {
-    if record::pick(&prefs::get().recorder) == Some(nixe_capture_core::RecordBackend::GstPortal) {
+    if record::pick(&prefs::get().recorder) == Some(nyx_capture_core::RecordBackend::GstPortal) {
         launch_record(Target::Portal);
         return;
     }
@@ -939,7 +939,7 @@ fn record_target(region: bool) -> Target {
     if !region && prefs::get().record_use_portal {
         return Target::Portal;
     }
-    if region && let Ok(Some(r)) = nixe_capture_core::capture::slurp_region() {
+    if region && let Ok(Some(r)) = nyx_capture_core::capture::slurp_region() {
         return Target::Region(r);
     }
     record::default_target().unwrap_or(Target::Portal)
@@ -997,19 +997,19 @@ fn start_record_session(
     cam: bool,
     cam_device: &str,
     cam_size: &str,
-) -> anyhow::Result<nixe_capture_core::RecordSession> {
-    let started_cam = cam && nixe_capture_core::webcam::available() && !nixe_capture_core::webcam::active();
+) -> anyhow::Result<nyx_capture_core::RecordSession> {
+    let started_cam = cam && nyx_capture_core::webcam::available() && !nyx_capture_core::webcam::active();
     if started_cam {
         let device = if cam_device.is_empty() { None } else { Some(cam_device) };
-        if let Err(err) = nixe_capture_core::webcam::start(device, nixe_capture_core::webcam::Size::parse(cam_size), true) {
-            eprintln!("nixe-capture: webcam overlay: {err}");
+        if let Err(err) = nyx_capture_core::webcam::start(device, nyx_capture_core::webcam::Size::parse(cam_size), true) {
+            eprintln!("nyx-capture: webcam overlay: {err}");
         }
     }
     match record::start(req) {
         Ok(session) => Ok(session),
         Err(err) => {
             if started_cam {
-                nixe_capture_core::webcam::stop();
+                nyx_capture_core::webcam::stop();
             }
             Err(err)
         }
@@ -1031,8 +1031,8 @@ pub fn pause_recording() {
 }
 
 pub fn toggle_webcam() {
-    if nixe_capture_core::webcam::active() {
-        nixe_capture_core::webcam::stop();
+    if nyx_capture_core::webcam::active() {
+        nyx_capture_core::webcam::stop();
         refresh_cam_button();
         return;
     }
@@ -1042,7 +1042,7 @@ pub fn toggle_webcam() {
     crate::cmd::background(
         move || {
             let dev = if device.is_empty() { None } else { Some(device.as_str()) };
-            nixe_capture_core::webcam::start(dev, nixe_capture_core::webcam::Size::parse(&size), false)
+            nyx_capture_core::webcam::start(dev, nyx_capture_core::webcam::Size::parse(&size), false)
         },
         |result| match result {
             Ok(_) => refresh_cam_button(),
@@ -1118,7 +1118,7 @@ fn refresh_record_button() {
 fn refresh_cam_button() {
     CAM_BTN.with(|b| {
         let Some(btn) = b.borrow().clone() else { return };
-        if nixe_capture_core::webcam::active() {
+        if nyx_capture_core::webcam::active() {
             btn.add_css_class("suggested-action");
             btn.set_tooltip_text(Some("Hide webcam overlay"));
         } else {
@@ -1178,7 +1178,7 @@ pub fn item_menu(id: &str, parent: &gtk::Widget, x: f64, y: f64) {
         menu.append(Some("Copy"), Some("item.copy"));
     }
     menu.append(Some("Export…"), Some("item.export"));
-    if row.kind == CaptureKind::Recording && nixe_capture_core::detect::present("ffmpeg") {
+    if row.kind == CaptureKind::Recording && nyx_capture_core::detect::present("ffmpeg") {
         menu.append(Some("Trim…"), Some("item.trim"));
     }
     // A selected capture's Delete takes the whole selection along.
@@ -1218,7 +1218,7 @@ pub fn item_menu(id: &str, parent: &gtk::Widget, x: f64, y: f64) {
 fn pin_file(path: &std::path::Path) {
     let path = path.to_path_buf();
     crate::cmd::background(
-        move || nixe_capture_core::export::shareable(&path).map(|img| img.to_rgba8()),
+        move || nyx_capture_core::export::shareable(&path).map(|img| img.to_rgba8()),
         |result| match result {
             Ok(img) => crate::pin::open_rgba(img),
             Err(err) => toast(&err.to_string()),
@@ -1325,7 +1325,7 @@ fn copy_capture(path: &std::path::Path) {
     let path = path.to_path_buf();
     crate::cmd::background(
         // As edited: a redacted shot is never copied without its redaction.
-        move || clipboard::copy_png(&nixe_capture_core::export::shareable_png(&path)?),
+        move || clipboard::copy_png(&nyx_capture_core::export::shareable_png(&path)?),
         |result| match result {
             Ok(()) => toast("Copied"),
             Err(err) => toast(&err.to_string()),
@@ -1389,7 +1389,7 @@ pub fn flush_deletes() {
         return;
     }
     if let Err(err) = delete_now(&gone) {
-        eprintln!("nixe-capture: {err}");
+        eprintln!("nyx-capture: {err}");
     }
     for id in &gone {
         crate::grid::forget_thumb(id);
@@ -1604,7 +1604,7 @@ pub fn toast_with_undo(message: &str, undo: impl Fn() + 'static) {
 
 fn show_toast(message: &str, undo: Option<Rc<dyn Fn()>>) {
     let Some(ui) = ui() else {
-        eprintln!("nixe-capture: {message}");
+        eprintln!("nyx-capture: {message}");
         return;
     };
     let overlay = ui.borrow().overlay.clone();

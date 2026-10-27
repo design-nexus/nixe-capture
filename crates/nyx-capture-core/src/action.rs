@@ -1,4 +1,4 @@
-//! CLI capture actions used by `nixe-capture` without opening the history window.
+//! CLI capture actions used by `nyx-capture` without opening the history window.
 
 use crate::capture::{self, CaptureMode, CaptureRequest, slurp_region};
 use crate::geom::Rect;
@@ -114,7 +114,7 @@ pub fn default_save_dir() -> PathBuf {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Pictures")))
         .unwrap_or_else(|| PathBuf::from("."));
-    pictures.join("Nixe Capture")
+    pictures.join("Nyx Capture")
 }
 
 pub fn save_path_in(dir: &std::path::Path) -> PathBuf {

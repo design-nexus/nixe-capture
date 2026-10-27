@@ -1,12 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["apps/capture", "apps/capture-glimpse", "crates/nixe-capture-core"]
+members = ["apps/capture", "apps/capture-glimpse", "crates/nyx-capture-core"]
 
 [workspace.package]
 edition = "2024"
 license = "MIT"
 authors = ["Ken Smith"]
-repository = "https://github.com/design-nexus/nixe-capture"
+repository = "https://github.com/design-nexus/nyx-capture"
 
 [profile.release]
 lto = "thin"

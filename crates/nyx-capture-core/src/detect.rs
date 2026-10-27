@@ -90,6 +90,6 @@ mod tests {
 
     #[test]
     fn missing_program_is_false() {
-        assert!(!present("nixe-capture-no-such-binary"));
+        assert!(!present("nyx-capture-no-such-binary"));
     }
 }

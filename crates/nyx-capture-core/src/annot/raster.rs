@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn a_flattened_copy_leaves_the_original_file_unchanged() {
-        let dir = std::env::temp_dir().join("nixe-capture-annot-file");
+        let dir = std::env::temp_dir().join("nyx-capture-annot-file");
         let _ = std::fs::create_dir_all(&dir);
         let src_path = dir.join("orig.png");
         sample().save(&src_path).unwrap();

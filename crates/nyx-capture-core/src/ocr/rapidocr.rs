@@ -50,23 +50,23 @@ pub fn models_present() -> bool {
 }
 
 pub fn cache_dir() -> PathBuf {
-    if let Some(p) = std::env::var_os("NIXE_CAPTURE_OCR_CACHE") {
+    if let Some(p) = std::env::var_os("NYX_CAPTURE_OCR_CACHE") {
         return PathBuf::from(p);
     }
     if let Some(p) = std::env::var_os("XDG_CACHE_HOME") {
-        return PathBuf::from(p).join("nixe-capture/rapidocr");
+        return PathBuf::from(p).join("nyx-capture/rapidocr");
     }
     if let Some(h) = std::env::var_os("HOME") {
-        return PathBuf::from(h).join(".cache/nixe-capture/rapidocr");
+        return PathBuf::from(h).join(".cache/nyx-capture/rapidocr");
     }
-    PathBuf::from("/tmp/nixe-capture/rapidocr")
+    PathBuf::from("/tmp/nyx-capture/rapidocr")
 }
 
 fn download_mode() -> ModelDownloadMode {
     if cfg!(test) {
         return ModelDownloadMode::Never;
     }
-    match std::env::var("NIXE_CAPTURE_OCR_DOWNLOAD") {
+    match std::env::var("NYX_CAPTURE_OCR_DOWNLOAD") {
         Ok(v) if v.eq_ignore_ascii_case("never") => ModelDownloadMode::Never,
         _ => ModelDownloadMode::Missing,
     }

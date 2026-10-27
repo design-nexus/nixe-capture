@@ -1,8 +1,8 @@
-//! Tools Nixe Assistant can call while Capture is open.
+//! Tools Nyx Assistant can call while Capture is open.
 
 use crate::window;
-use nixe_capture_core::capture::CaptureMode;
-use nixe_core::control::{Reply, text};
+use nyx_capture_core::capture::CaptureMode;
+use nyx_core::control::{Reply, text};
 use serde_json::{Value, json};
 
 pub fn tools() -> Value {
@@ -70,7 +70,7 @@ fn ocr_text(args: &Value) -> Result<Value, String> {
 
 fn export(args: &Value) -> Result<Value, String> {
     let id = text(args, "id")?;
-    let dest = nixe_core::control::save_target(args)?;
+    let dest = nyx_core::control::save_target(args)?;
     window::export_id(&id, &dest).map_err(|e| e.to_string())
 }
 

@@ -4,8 +4,8 @@ use crate::widgets;
 use gtk::cairo;
 use gtk::prelude::*;
 use image::RgbaImage;
-use nixe_capture_core::ocr::OcrResult;
-use nixe_capture_core::clipboard;
+use nyx_capture_core::ocr::OcrResult;
+use nyx_capture_core::clipboard;
 
 pub fn show(parent: &impl IsA<gtk::Window>, img: &RgbaImage, result: &OcrResult) {
     let (dialog, card) = widgets::dialog("Text", 640);

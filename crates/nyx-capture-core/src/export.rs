@@ -31,7 +31,7 @@ pub fn is_edited(path: &Path) -> bool {
     crate::annot::EditState::load(&crate::annot::sidecar_path(path)).is_ok_and(|s| s.is_edited())
 }
 
-/// The picture to hand out (copy, pin, thumbnail, Nixe Assistant): with its marks burned
+/// The picture to hand out (copy, pin, thumbnail, Nyx Assistant): with its marks burned
 /// in, so a redaction is never left behind in what leaves the editor.
 pub fn shareable(path: &Path) -> Result<DynamicImage> {
     if is_edited(path) {
@@ -58,7 +58,7 @@ mod tests {
 
     #[test]
     fn flatten_burns_marks_and_leaves_the_original() {
-        let dir = std::env::temp_dir().join(format!("nixe-capture-flat-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("nyx-capture-flat-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("shot.png");
         let dest = dir.join("out.png");

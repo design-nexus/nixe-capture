@@ -1,6 +1,6 @@
 //! Well-known locations. Every path honours the XDG overrides.
 
-pub use nixe_core::paths::*;
+pub use nyx_core::paths::*;
 
 use std::path::PathBuf;
 

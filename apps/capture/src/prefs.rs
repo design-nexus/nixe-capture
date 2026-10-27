@@ -1,6 +1,6 @@
-//! This app's own preferences (`~/.config/nixe-capture/settings.toml`).
+//! This app's own preferences (`~/.config/nyx-capture/settings.toml`).
 
-pub use nixe_theme::ThemeMode;
+pub use nyx_theme::ThemeMode;
 
 use serde::{Deserialize, Serialize};
 
@@ -70,4 +70,4 @@ impl Default for Prefs {
     }
 }
 
-nixe_core::prefs_store!(Prefs);
+nyx_core::prefs_store!(Prefs);

@@ -8,9 +8,9 @@ use gtk::gdk::{self, prelude::*};
 use gtk::glib;
 use gtk::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use nixe_capture_core::capture::{CaptureBackend, CaptureMode, CaptureRequest, Grim, Shot};
-use nixe_capture_core::geom::Rect;
-use nixe_capture_core::select;
+use nyx_capture_core::capture::{CaptureBackend, CaptureMode, CaptureRequest, Grim, Shot};
+use nyx_capture_core::geom::Rect;
+use nyx_capture_core::select;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -111,7 +111,7 @@ pub fn countdown(secs: u32, on_done: impl FnOnce(bool) + 'static) -> anyhow::Res
     let window = gtk::Window::new();
     window.init_layer_shell();
     window.set_layer(Layer::Overlay);
-    window.set_namespace(Some("nixe-capture-delay"));
+    window.set_namespace(Some("nyx-capture-delay"));
     window.set_keyboard_mode(KeyboardMode::Exclusive);
     window.set_anchor(Edge::Top, true);
     window.set_margin(Edge::Top, 56);
@@ -273,7 +273,7 @@ pub fn pick(still: Shot, snap: bool, on_pick: impl FnOnce(Option<Rect>) + 'stati
         let window = gtk::Window::new();
         window.init_layer_shell();
         window.set_layer(Layer::Overlay);
-        window.set_namespace(Some("nixe-capture"));
+        window.set_namespace(Some("nyx-capture"));
         window.set_keyboard_mode(KeyboardMode::Exclusive);
         window.set_anchor(Edge::Top, true);
         window.set_anchor(Edge::Bottom, true);
@@ -324,21 +324,21 @@ pub fn pick(still: Shot, snap: bool, on_pick: impl FnOnce(Option<Rect>) + 'stati
 
 /// Cold CLI: freeze, pick, crop, then copy/save/OCR. Caller has already delayed.
 pub fn run_cli(
-    action: &nixe_capture_core::action::Action,
-) -> anyhow::Result<(nixe_capture_core::action::Outcome, Option<Shot>)> {
+    action: &nyx_capture_core::action::Action,
+) -> anyhow::Result<(nyx_capture_core::action::Outcome, Option<Shot>)> {
     ensure_gtk()?;
     if !supported() {
         anyhow::bail!("layer-shell isn't available");
     }
-    nixe_capture_core::action::require_tools_for(&CaptureMode::FullDesktop, action.after, action.ocr_mode)?;
+    nyx_capture_core::action::require_tools_for(&CaptureMode::FullDesktop, action.after, action.ocr_mode)?;
     let still = freeze()?;
     let snap = matches!(action.mode, CaptureMode::SelectWindow);
     let picked = run_blocking(still.clone(), snap);
     match picked {
-        None => Ok((nixe_capture_core::action::Outcome::Cancelled, None)),
+        None => Ok((nyx_capture_core::action::Outcome::Cancelled, None)),
         Some(rect) => {
             let shot = still.crop_layout(rect)?;
-            Ok((nixe_capture_core::action::finish(&shot, action)?, Some(shot)))
+            Ok((nyx_capture_core::action::finish(&shot, action)?, Some(shot)))
         }
     }
 }
@@ -387,7 +387,7 @@ pub fn show_recording_pill() {
     let window = gtk::Window::new();
     window.init_layer_shell();
     window.set_layer(Layer::Overlay);
-    window.set_namespace(Some("nixe-capture-recording"));
+    window.set_namespace(Some("nyx-capture-recording"));
     window.set_keyboard_mode(KeyboardMode::None);
     window.set_anchor(Edge::Top, true);
     window.set_margin(Edge::Top, 8);
@@ -407,7 +407,7 @@ pub fn show_recording_pill() {
     time.add_css_class("capture-pill-time");
     bar.append(&dot);
     bar.append(&time);
-    if nixe_capture_core::record::can_pause() {
+    if nyx_capture_core::record::can_pause() {
         let pause = crate::widgets::icon_button("media-playback-pause-symbolic", "Pause or resume (Ctrl+Alt+P)");
         pause.connect_clicked(|_| crate::window::pause_recording());
         bar.append(&pause);
@@ -420,7 +420,7 @@ pub fn show_recording_pill() {
     let weak = window.downgrade();
     glib::timeout_add_seconds_local(1, move || {
         let Some(w) = weak.upgrade() else { return glib::ControlFlow::Break };
-        let Some(session) = nixe_capture_core::record::active() else {
+        let Some(session) = nyx_capture_core::record::active() else {
             w.close();
             return glib::ControlFlow::Break;
         };

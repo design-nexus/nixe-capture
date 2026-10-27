@@ -4,16 +4,16 @@ use crate::settings_page;
 use crate::widgets;
 use crate::window;
 use gtk::prelude::*;
-use nixe_ui::settings_card::{self, Spec};
+use nyx_ui::settings_card::{self, Spec};
 
-pub use nixe_ui::settings_card::fit;
+pub use nyx_ui::settings_card::fit;
 
 const GROUPS: &[(&str, &str, &str)] = &[
     ("Capture window", "applications-graphics-symbolic", "Theme, glow, motion"),
     ("Capture", "camera-photo-symbolic", "What happens after a shot"),
     ("History", "document-open-recent-symbolic", "Keep, search, and forget captures"),
     ("OCR", "edit-find-symbolic", "Tesseract and RapidOCR"),
-    ("Privacy", "channel-secure-symbolic", "Redaction and Nixe Assistant"),
+    ("Privacy", "channel-secure-symbolic", "Redaction and Nyx Assistant"),
     ("Recording", "media-record-symbolic", "Recorder, audio, format, webcam"),
     ("Keyboard", "input-keyboard-symbolic", "Shortcuts"),
 ];

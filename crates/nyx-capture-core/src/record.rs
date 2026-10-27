@@ -119,7 +119,7 @@ pub trait Recorder {
 
 /// First installed recorder, or the named preference when that binary exists.
 pub fn pick(pref: &str) -> Option<Backend> {
-    if let Ok(forced) = std::env::var("NIXE_CAPTURE_RECORDER") {
+    if let Ok(forced) = std::env::var("NYX_CAPTURE_RECORDER") {
         return named(&forced);
     }
     if pref != "auto"
@@ -745,7 +745,7 @@ fn alive(pid: u32) -> bool {
 
 pub fn session_path() -> PathBuf {
     let dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
-    dir.join("nixe-capture").join("recording.json")
+    dir.join("nyx-capture").join("recording.json")
 }
 
 fn write_session(session: &Session) -> Result<()> {
@@ -790,7 +790,7 @@ pub fn default_output_dir() -> PathBuf {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Videos")))
         .unwrap_or_else(|| PathBuf::from("."));
-    videos.join("Nixe Capture")
+    videos.join("Nyx Capture")
 }
 
 pub fn output_path(dir: &Path, container: Container) -> PathBuf {
@@ -866,9 +866,9 @@ mod tests {
 
     #[test]
     fn pick_honours_forced_env() {
-        unsafe { std::env::set_var("NIXE_CAPTURE_RECORDER", "wf-recorder") };
+        unsafe { std::env::set_var("NYX_CAPTURE_RECORDER", "wf-recorder") };
         assert_eq!(pick("auto"), Some(Backend::WfRecorder));
-        unsafe { std::env::remove_var("NIXE_CAPTURE_RECORDER") };
+        unsafe { std::env::remove_var("NYX_CAPTURE_RECORDER") };
     }
 
     #[test]
