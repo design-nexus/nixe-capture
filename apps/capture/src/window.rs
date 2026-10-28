@@ -1,5 +1,6 @@
-//! The Capture window. The sidebar follows Music: it does not grow, and it
-//! collapses to icons under 980 px or when the user collapses it.
+//! The Capture window (Nyx Design 2.0): the shared header with the capture actions,
+//! search or the selection in the middle; the sidebar does not grow, and it collapses
+//! to icons under 980 px or when the user collapses it.
 
 use crate::paths;
 use crate::prefs;
@@ -44,6 +45,7 @@ pub const SHORTCUTS: &[(&[&str], &str)] = &[
 
 struct Ui {
     window: gtk::ApplicationWindow,
+    header: chrome::AppHeader,
     overlay: gtk::Overlay,
     nav: gtk::Box,
     nav_list: gtk::Box,
@@ -61,7 +63,6 @@ thread_local! {
     static UI: RefCell<Option<Rc<RefCell<Ui>>>> = const { RefCell::new(None) };
     static NARROW: Cell<bool> = const { Cell::new(false) };
     static TOAST: RefCell<Option<gtk::Box>> = const { RefCell::new(None) };
-    static STATUS: RefCell<Option<gtk::Label>> = const { RefCell::new(None) };
     static MENU: RefCell<Option<gtk::Popover>> = const { RefCell::new(None) };
     static RECORD_BTN: RefCell<Option<gtk::Button>> = const { RefCell::new(None) };
     static PAUSE_BTN: RefCell<Option<gtk::Button>> = const { RefCell::new(None) };
@@ -91,12 +92,6 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
     }
     let Some(ui) = ui() else { return };
     let window = ui.borrow().window.clone();
-    if std::env::var_os("CAPTURE_SNAPSHOT").is_some() {
-        window.set_default_size(
-            std::env::var("CAPTURE_SNAPSHOT_W").ok().and_then(|v| v.parse().ok()).unwrap_or(1120),
-            std::env::var("CAPTURE_SNAPSHOT_H").ok().and_then(|v| v.parse().ok()).unwrap_or(800),
-        );
-    }
     window.present();
     match section {
         Some("settings") => settings_dialog::open(),
@@ -105,10 +100,6 @@ pub fn present(app: &gtk::Application, section: Option<&str>) {
             let start = nyx_theme::start_page("recent", &prefs::get().last_section);
             navigate(view_from_section(&start));
         }
-    }
-    if let Some(out) = std::env::var_os("CAPTURE_SNAPSHOT") {
-        snapshot_and_quit(app, PathBuf::from(out));
-        return;
     }
     maybe_tutorial();
 }
@@ -145,6 +136,7 @@ pub fn navigate(view: View) {
     ui.borrow_mut().view = view;
     prefs::update(|p| p.last_section = section_id(view).into());
     chrome::set_title(&ui.borrow().window, "Capture", page_name(view));
+    ui.borrow().header.set_subtitle(page_name(view));
     reload();
     rebuild_nav();
 }
@@ -344,7 +336,7 @@ fn refresh_status() {
     let mut text = if !prefs::get().history {
         "History off".into()
     } else if count == 0 {
-        "Capture".into()
+        String::new()
     } else if count == 1 {
         "1 capture".into()
     } else {
@@ -426,67 +418,59 @@ fn build(app: &gtk::Application) {
         .vexpand(true)
         .child(&list)
         .build();
-    let head = chrome::sidebar_head("Capture", Some("Search captures (Ctrl+F)"));
-    head.toggle.connect_clicked(|_| toggle_sidebar());
-    nav.append(&head.root);
     nav.append(&nav_scroll);
 
+    // The app and the page, the sidebar toggle; search (or the selection) in the
+    // middle; what's going on, the capture actions and Settings at the end.
+    let header = chrome::app_header(&window, "capture-region-symbolic", "Capture");
+    let collapse = widgets::bar_button("sidebar-show-symbolic", "Collapse the sidebar (Ctrl+B)");
+    collapse.connect_clicked(|_| toggle_sidebar());
+    header.start.append(&collapse);
+
     let search = gtk::SearchEntry::new();
-    search.set_placeholder_text(Some("Search captures"));
-    search.set_visible(false);
+    search.set_placeholder_text(Some("Search captures (Ctrl+F)"));
+    search.add_css_class("bar-search");
+    // A small minimum keeps the header narrow enough for a half-screen tile.
+    search.set_width_chars(8);
+    search.set_max_width_chars(SEARCH_WIDE);
     search.connect_search_changed(|_| reload());
-    search.connect_stop_search(|entry| {
-        entry.set_text("");
-        entry.set_visible(false);
-    });
-    if let Some(find) = &head.search {
-        let entry = search.clone();
-        find.connect_clicked(move |_| {
-            if entry.is_visible() && entry.text().is_empty() {
-                entry.set_visible(false);
-            } else {
-                entry.set_visible(true);
-                entry.grab_focus();
-            }
-        });
-    }
+    search.connect_stop_search(|entry| entry.set_text(""));
+    header.center.append(&search);
 
     let hint = widgets::label("No captures yet. Ctrl+N grabs a region.", "empty-hint");
     hint.set_wrap(true);
-    hint.set_xalign(0.0);
-    hint.set_valign(gtk::Align::Start);
+    hint.set_justify(gtk::Justification::Center);
+    hint.set_valign(gtk::Align::Center);
     hint.set_vexpand(true);
 
     let scroller = crate::grid::build();
 
-    let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-    toolbar.add_css_class("toolbar");
+    let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 2);
     let tools = nyx_capture_core::detect::Tools::probe();
     if tools.grim {
-        let region = widgets::icon_button("capture-region-symbolic", "Capture a region (Ctrl+N)");
-        region.add_css_class("suggested-action");
+        let region = widgets::bar_button("capture-region-symbolic", "Capture a region (Ctrl+N)");
         region.connect_clicked(|_| capture_now(CaptureMode::SelectRegion));
         toolbar.append(&region);
         if tools.hyprctl {
-            let window_btn = widgets::icon_button("focus-windows-symbolic", "Capture a window (Ctrl+Shift+N)");
+            let window_btn = widgets::bar_button("focus-windows-symbolic", "Capture a window (Ctrl+Shift+N)");
             window_btn.connect_clicked(|_| capture_now(CaptureMode::SelectWindow));
             toolbar.append(&window_btn);
         }
-        let screen = widgets::icon_button("video-display-symbolic", "Capture the focused monitor (Ctrl+Shift+F)");
+        let screen = widgets::bar_button("video-display-symbolic", "Capture the focused monitor (Ctrl+Shift+F)");
         screen.connect_clicked(|_| capture_now(CaptureMode::FullDesktop));
         toolbar.append(&screen);
         if tools.can_scroll() {
-            let scroll = widgets::icon_button("view-continuous-symbolic", "Scrolling capture (Ctrl+Shift+L)");
+            let scroll = widgets::bar_button("view-continuous-symbolic", "Scrolling capture (Ctrl+Shift+L)");
             scroll.connect_clicked(|_| start_scroll());
             toolbar.append(&scroll);
         }
     }
     if tools.can_record() {
-        let rec = widgets::icon_button("media-record-symbolic", "Start a recording (Ctrl+R)");
+        let rec = widgets::bar_button("media-record-symbolic", "Start a recording (Ctrl+R)");
         rec.connect_clicked(|_| toggle_record(false));
         RECORD_BTN.with(|b| *b.borrow_mut() = Some(rec.clone()));
         toolbar.append(&rec);
-        let pause = widgets::icon_button("media-playback-pause-symbolic", "Pause recording (Ctrl+Alt+P)");
+        let pause = widgets::bar_button("media-playback-pause-symbolic", "Pause recording (Ctrl+Alt+P)");
         pause.set_visible(false);
         pause.connect_clicked(|_| pause_recording());
         PAUSE_BTN.with(|b| *b.borrow_mut() = Some(pause.clone()));
@@ -498,34 +482,41 @@ fn build(app: &gtk::Application) {
         refresh_record_button();
     }
     if tools.can_webcam() {
-        let cam = widgets::icon_button("camera-web-symbolic", "Picture-in-picture webcam");
+        let cam = widgets::bar_button("camera-web-symbolic", "Picture-in-picture webcam");
         cam.connect_clicked(|_| toggle_webcam());
         CAM_BTN.with(|b| *b.borrow_mut() = Some(cam.clone()));
         toolbar.append(&cam);
         refresh_cam_button();
     }
 
-    // What to do with the selection: how many, then the actions.
-    let selection = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    // While captures are selected the middle of the header is the selection: how
+    // many, then the actions.
+    let selection = gtk::Box::new(gtk::Orientation::Horizontal, 4);
     selection.set_visible(false);
-    selection.set_hexpand(true);
-    selection.set_halign(gtk::Align::End);
     let selection_count = widgets::label("", "selection-chip");
     selection_count.set_valign(gtk::Align::Center);
-    let delete = widgets::icon_button("user-trash-symbolic", "Delete the selected captures (Delete)");
+    selection_count.set_margin_end(4);
+    let delete = widgets::bar_button("user-trash-symbolic", "Delete the selected captures (Delete)");
     delete.connect_clicked(|_| delete_later(crate::grid::selected()));
-    let deselect = widgets::icon_button("edit-clear-symbolic", "Clear the selection (Esc)");
+    let deselect = widgets::bar_button("edit-clear-symbolic", "Clear the selection (Esc)");
     deselect.connect_clicked(|_| crate::grid::clear_selection());
     selection.append(&selection_count);
     selection.append(&delete);
     selection.append(&deselect);
-    toolbar.append(&selection);
+    header.center.append(&selection);
+
+    header.end.set_spacing(4);
+    let status = widgets::label("", "header-status");
+    status.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    status.set_max_width_chars(24);
+    status.set_margin_end(4);
+    header.end.append(&status);
+    header.end.append(&toolbar);
+    header.end.append(&chrome::settings_button(settings_dialog::open));
 
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     content.add_css_class("settings-content");
     content.set_hexpand(true);
-    content.append(&chrome::search_strip(&search));
-    content.append(&toolbar);
     content.append(&hint);
     content.append(&scroller);
 
@@ -536,8 +527,8 @@ fn build(app: &gtk::Application) {
 
     let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
     frame.add_css_class("window-frame");
+    frame.append(&header.root);
     frame.append(&body);
-    frame.append(&status_bar());
 
     let overlay = gtk::Overlay::new();
     overlay.set_child(Some(&frame));
@@ -546,11 +537,12 @@ fn build(app: &gtk::Application) {
 
     let ui = Ui {
         window: window.clone(),
+        header,
         overlay: overlay.clone(),
         nav: nav.clone(),
         nav_list: list,
         search,
-        status: status_label(),
+        status,
         hint,
         scroller,
         selection,
@@ -577,6 +569,12 @@ fn build(app: &gtk::Application) {
             nav.add_css_class("sized");
             NARROW.with(|n| n.set(narrow));
             apply_compact(&nav, narrow || prefs::get().sidebar_collapsed);
+            if let Some(ui) = self::ui() {
+                let ui = ui.borrow();
+                // The centred search mustn't reach the sidebar toggle or the actions.
+                ui.search.set_max_width_chars(if narrow { SEARCH_NARROW } else { SEARCH_WIDE });
+                ui.status.set_visible(!narrow);
+            }
         }
     };
     let aw = apply_width.clone();
@@ -602,6 +600,18 @@ pub fn capture_now(mode: CaptureMode) {
 thread_local! {
     /// The window that was focused when the last capture began: the shot's title.
     static LAST_TITLE: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+thread_local! {
+    /// Brings the history window back once the editor a capture opened is closed.
+    static RESTORE_AFTER_EDIT: RefCell<Option<Rc<dyn Fn()>>> = const { RefCell::new(None) };
+}
+
+/// The editor closed: show the history window again if the capture hid it.
+pub fn editor_closed() {
+    if let Some(restore) = RESTORE_AFTER_EDIT.with(|r| r.borrow_mut().take()) {
+        restore();
+    }
 }
 
 /// The title for the capture being taken (see `LAST_TITLE`).
@@ -761,7 +771,10 @@ fn start_overlay(mode: CaptureMode, after: After, langs: String, ocr_mode: OcrMo
                         move || cropped.crop_layout(rect),
                         move |result| match result {
                             Ok(shot) => {
-                                if !matches!(after, After::Edit | After::Pin) {
+                                // The editor replaces the history window until it closes.
+                                if after == After::Edit {
+                                    RESTORE_AFTER_EDIT.with(|r| *r.borrow_mut() = Some(restore_done.clone()));
+                                } else {
                                     restore_done();
                                 }
                                 finish_shot(shot, after, langs_done.clone(), ocr_mode, save_picked.clone());
@@ -1401,6 +1414,7 @@ pub fn selection_changed() {
     let Some(ui) = ui() else { return };
     let n = crate::grid::selected().len();
     ui.borrow().selection.set_visible(n > 0);
+    ui.borrow().search.set_visible(n == 0);
     ui.borrow().selection_count.set_text(&format!("{n} selected"));
     refresh_status();
 }
@@ -1415,29 +1429,10 @@ fn report_capture(result: Result<action::Outcome, anyhow::Error>) {
     }
 }
 
-fn status_label() -> gtk::Label {
-    STATUS.with(|s| s.borrow().clone().unwrap_or_else(|| widgets::label("", "status-readout")))
-}
-
-fn status_bar() -> gtk::Box {
-    let bar = gtk::Box::new(gtk::Orientation::Horizontal, 16);
-    bar.add_css_class("status-bar");
-    bar.append(&chrome::shortcuts_button(show_shortcuts));
-    let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    spacer.set_hexpand(true);
-    bar.append(&spacer);
-    let readout = widgets::label("", "status-readout");
-    readout.set_ellipsize(gtk::pango::EllipsizeMode::Start);
-    STATUS.with(|s| *s.borrow_mut() = Some(readout.clone()));
-    bar.append(&readout);
-    bar.append(&chrome::gear(settings_dialog::open));
-    bar
-}
+const SEARCH_WIDE: i32 = 24;
+const SEARCH_NARROW: i32 = 12;
 
 fn apply_compact(nav: &gtk::Box, compact: bool) {
-    if let Some(head) = nav.first_child().and_downcast::<gtk::Box>() {
-        chrome::set_head_compact(&head, compact);
-    }
     if compact {
         nav.add_css_class("compact");
     } else {
@@ -1468,37 +1463,6 @@ pub fn toggle_sidebar() {
     apply_compact(&nav, NARROW.with(|n| n.get()) || prefs::get().sidebar_collapsed);
 }
 
-fn snapshot_and_quit(app: &gtk::Application, out: PathBuf) {
-    let Some(ui) = ui() else { return };
-    let window = ui.borrow().window.clone();
-    window.set_opacity(0.01);
-    window.set_title(Some("Capture snapshot"));
-    window.set_default_size(
-        std::env::var("CAPTURE_SNAPSHOT_W").ok().and_then(|v| v.parse().ok()).unwrap_or(1120),
-        std::env::var("CAPTURE_SNAPSHOT_H").ok().and_then(|v| v.parse().ok()).unwrap_or(800),
-    );
-    window.present();
-    let app = app.clone();
-    let delay: u64 = std::env::var("CAPTURE_SNAPSHOT_DELAY").ok().and_then(|v| v.parse().ok()).unwrap_or(900);
-    glib::timeout_add_local_once(std::time::Duration::from_millis(delay), move || {
-        if let Some(child) = window.child() {
-            let paintable = gtk::WidgetPaintable::new(Some(&child));
-            let (w, h) = (child.width(), child.height());
-            let snapshot = gtk::Snapshot::new();
-            snapshot.append_color(&gdk::RGBA::BLACK, &gtk::graphene::Rect::new(0.0, 0.0, w as f32, h as f32));
-            paintable.snapshot(&snapshot, w as f64, h as f64);
-            if let (Some(node), Some(renderer)) = (snapshot.to_node(), window.renderer()) {
-                let texture = renderer.render_texture(node, None);
-                match texture.save_to_png(&out) {
-                    Ok(()) => println!("snapshot {w}x{h} -> {}", out.display()),
-                    Err(e) => eprintln!("snapshot failed: {e}"),
-                }
-            }
-        }
-        app.quit();
-    });
-}
-
 fn typing(window: &gtk::Window) -> bool {
     let Some(focus) = gtk::prelude::GtkWindowExt::focus(window) else { return false };
     focus.is::<gtk::Text>() || focus.is::<gtk::TextView>() || focus.ancestor(gtk::Entry::static_type()).is_some()
@@ -1512,7 +1476,6 @@ fn install_keys(window: &gtk::ApplicationWindow, search: &gtk::SearchEntry) {
         let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
         let shift = mods.contains(gdk::ModifierType::SHIFT_MASK);
         if ctrl && key == gdk::Key::f {
-            search.set_visible(true);
             search.grab_focus();
             return glib::Propagation::Stop;
         }

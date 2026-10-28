@@ -15,6 +15,7 @@ use nyx_capture_core::export;
 use nyx_capture_core::ocr::{OcrMode, recognize};
 use nyx_capture_core::store;
 use nyx_capture_core::clipboard;
+use nyx_ui::chrome;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -86,6 +87,7 @@ struct Session {
 
 struct Inner {
     window: gtk::ApplicationWindow,
+    header: chrome::AppHeader,
     canvas: gtk::DrawingArea,
     session: RefCell<Option<Session>>,
     tool_buttons: Vec<(Tool, gtk::ToggleButton)>,
@@ -187,17 +189,15 @@ impl Editor {
         style.set_valign(gtk::Align::Center);
         style.set_popover(Some(&style_pop));
 
-        let undo = widgets::icon_button("edit-undo-symbolic", "Undo (Ctrl+Z)");
-        let redo = widgets::icon_button("edit-redo-symbolic", "Redo (Ctrl+Shift+Z)");
-        let copy = widgets::icon_button("edit-copy-symbolic", "Copy annotated image (Ctrl+C)");
-        copy.add_css_class("suggested-action");
-        let save = widgets::icon_button("document-save-symbolic", "Save annotated image (Ctrl+S)");
+        let undo = widgets::bar_button("edit-undo-symbolic", "Undo (Ctrl+Z)");
+        let redo = widgets::bar_button("edit-redo-symbolic", "Redo (Ctrl+Shift+Z)");
+        let copy = widgets::bar_button("edit-copy-symbolic", "Copy annotated image (Ctrl+C)");
+        let save = widgets::bar_button("document-save-symbolic", "Save annotated image (Ctrl+S)");
         let pin = widgets::icon_button("view-pin-symbolic", "Pin on the desktop");
         let ocr = widgets::icon_button("edit-find-symbolic", "Read text in the shot");
-        let redact = widgets::icon_button("channel-secure-symbolic", "Redact emails, URLs, cards, and keys");
-        let close = widgets::icon_button("window-close-symbolic", "Close (Esc)");
-        // Pin and Read text are used less; they share one button so the bar fits on one
-        // row in an 800 px window.
+        let redact = widgets::bar_button("channel-secure-symbolic", "Redact emails, URLs, cards, and keys");
+        // Pin and Read text are used less; they share one button so the header fits an
+        // 800 px window.
         let more_box = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         more_box.set_margin_top(4);
         more_box.set_margin_bottom(4);
@@ -214,24 +214,27 @@ impl Editor {
         let more = gtk::MenuButton::new();
         more.set_icon_name("view-more-symbolic");
         more.set_tooltip_text(Some("Pin or read text"));
-        more.add_css_class("flat");
+        more.add_css_class("bar-button");
         more.set_valign(gtk::Align::Center);
         more.set_popover(Some(&more_pop));
 
+        // The app and the shot; the edit actions, then Save and Copy, at the end.
+        let header = chrome::app_header(&window, "capture-region-symbolic", "Capture");
+        header.end.set_spacing(4);
+        for b in [undo.upcast_ref::<gtk::Widget>(), redo.upcast_ref(), redact.upcast_ref(), more.upcast_ref(), save.upcast_ref(), copy.upcast_ref()] {
+            header.end.append(b);
+        }
+
+        // The tools and their colour and size, centred under the shot.
         let strip = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         strip.add_css_class("editor-bar");
+        strip.set_halign(gtk::Align::Center);
         strip.append(&tools);
         strip.append(&style);
-        strip.append(&undo);
-        strip.append(&redo);
-        strip.append(&copy);
-        strip.append(&save);
-        strip.append(&redact);
-        strip.append(&more);
-        strip.append(&close);
 
         let frame = gtk::Box::new(gtk::Orientation::Vertical, 0);
         frame.add_css_class("window-frame");
+        frame.append(&header.root);
         frame.append(&canvas);
         frame.append(&strip);
 
@@ -241,6 +244,7 @@ impl Editor {
 
         let editor = Editor(Rc::new(Inner {
             window: window.clone(),
+            header,
             canvas: canvas.clone(),
             session: RefCell::new(None),
             tool_buttons,
@@ -286,9 +290,11 @@ impl Editor {
         ocr.connect_clicked(move |_| me.ocr());
         let me = editor.clone();
         redact.connect_clicked(move |_| me.redact());
-        let win = window.clone();
-        close.connect_clicked(move |_| win.close());
 
+        window.connect_close_request(|_| {
+            crate::window::editor_closed();
+            glib::Propagation::Proceed
+        });
         window.present();
         editor
     }
@@ -301,6 +307,7 @@ impl Editor {
         let (w, h) = (original.width() as i32, original.height() as i32);
         let persist = prefs::get().history;
         let title = crate::window::capture_title();
+        self.0.header.set_subtitle(if title.is_empty() { "New shot" } else { &title });
         self.0.session.replace(Some(Session {
             original,
             preview_src,
@@ -373,6 +380,14 @@ impl Editor {
     fn load_saved(&self, original: RgbaImage, state: EditState, id: String, path: PathBuf) {
         // An older sidecar's marks are moved onto the whole picture before editing.
         let state = state.upgraded(original.width() as f64, original.height() as f64);
+        let title = store::open(&paths::library_db())
+            .ok()
+            .and_then(|db| db.get(&id).ok().flatten())
+            .map(|row| row.title)
+            .filter(|t| !t.is_empty())
+            .or_else(|| path.file_stem().map(|s| s.to_string_lossy().into_owned()))
+            .unwrap_or_default();
+        self.0.header.set_subtitle(&title);
         let preview_src = annot::preview(&original, WORK_EDGE);
         let work = annot::render(&preview_src, &state);
         self.0.session.replace(Some(Session {

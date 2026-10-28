@@ -253,15 +253,19 @@ pub fn pick(still: Shot, snap: bool, on_pick: impl FnOnce(Option<Rect>) + 'stati
     if candidates.is_empty() {
         candidates.extend(outputs.iter().map(|(_, r)| *r));
     }
+    // Start where the pointer is, with the window under it already lit, rather than a
+    // dark screen and a magnifier in the corner until the mouse moves.
+    let cursor = pointer().unwrap_or((i32::MIN, i32::MIN));
+    let hinted = select::snap_rect_at(cursor, &candidates);
     let session = Rc::new(RefCell::new(Session {
         still,
         surface,
         snap,
         dragging: false,
         origin: None,
-        current: None,
-        hinted: None,
-        cursor: (0, 0),
+        current: if snap { hinted } else { None },
+        hinted,
+        cursor,
         candidates,
         canvases: Vec::new(),
         windows: Vec::new(),
@@ -274,7 +278,8 @@ pub fn pick(still: Shot, snap: bool, on_pick: impl FnOnce(Option<Rect>) + 'stati
         window.init_layer_shell();
         window.set_layer(Layer::Overlay);
         window.set_namespace(Some("nyx-capture"));
-        window.set_keyboard_mode(KeyboardMode::Exclusive);
+        // A test copy's selector never takes the keyboard from the real session.
+        window.set_keyboard_mode(if test_monitor().is_some() { KeyboardMode::None } else { KeyboardMode::Exclusive });
         window.set_anchor(Edge::Top, true);
         window.set_anchor(Edge::Bottom, true);
         window.set_anchor(Edge::Left, true);
@@ -319,7 +324,31 @@ pub fn pick(still: Shot, snap: bool, on_pick: impl FnOnce(Option<Rect>) + 'stati
         session.borrow_mut().windows.push(window.clone());
         window.present();
     }
+    #[cfg(debug_assertions)]
+    if let Some(ms) = std::env::var("CAPTURE_TEST_CANCEL_MS").ok().and_then(|v| v.parse().ok()) {
+        glib::timeout_add_local_once(std::time::Duration::from_millis(ms), || finish(None));
+    }
+    // Debug builds: pick the first output whole after a delay, as a drag across it would.
+    #[cfg(debug_assertions)]
+    if let Some(ms) = std::env::var("CAPTURE_TEST_PICK_MS").ok().and_then(|v| v.parse().ok())
+        && let Some((_, layout)) = self::outputs()?.into_iter().next()
+    {
+        glib::timeout_add_local_once(std::time::Duration::from_millis(ms), move || finish(Some(layout)));
+    }
     Ok(())
+}
+
+/// Debug builds: `CAPTURE_TEST_MONITOR=<connector>` keeps the selector on that output
+/// (a virtual monitor for layout checks), without the keyboard.
+fn test_monitor() -> Option<String> {
+    if cfg!(debug_assertions) { std::env::var("CAPTURE_TEST_MONITOR").ok() } else { None }
+}
+
+/// The pointer in layout coordinates (Hyprland's), if Hyprland can say.
+fn pointer() -> Option<(i32, i32)> {
+    let out = std::process::Command::new("hyprctl").args(["cursorpos", "-j"]).output().ok()?;
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    Some((v["x"].as_i64()? as i32, v["y"].as_i64()? as i32))
 }
 
 /// Cold CLI: freeze, pick, crop, then copy/save/OCR. Caller has already delayed.
@@ -453,6 +482,11 @@ fn outputs() -> anyhow::Result<Vec<(gdk::Monitor, Rect)>> {
     let mut out = Vec::new();
     for i in 0..list.n_items() {
         let Some(mon) = list.item(i).and_downcast::<gdk::Monitor>() else { continue };
+        if let Some(only) = test_monitor()
+            && mon.connector().is_none_or(|c| c != only)
+        {
+            continue;
+        }
         let layout = match_hypr(&mon, &hypr).unwrap_or_else(|| gdk_rect(&mon));
         out.push((mon, layout));
     }
@@ -709,7 +743,7 @@ fn paint_still(cr: &Context, surface: &ImageSurface, still: &Shot, mon: Rect, ww
 
 fn paint_chip(cr: &Context, r: Rect, x: f64, y: f64, w: f64, ww: f64, wh: f64) {
     let label = format!("{}×{}  {},{}", r.w, r.h, r.x, r.y);
-    cr.select_font_face("JetBrains Mono", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    cr.select_font_face("Inter", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
     cr.set_font_size(12.0);
     let ext = cr.text_extents(&label).unwrap_or_else(|_| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
     let pad_x = 8.0;
@@ -725,20 +759,26 @@ fn paint_chip(cr: &Context, r: Rect, x: f64, y: f64, w: f64, ww: f64, wh: f64) {
     cy = cy.clamp(8.0, (wh - ch - 8.0).max(8.0));
     if let Some(bg) = token("theme_bg") {
         set_rgba(cr, bg, None);
-        cr.rectangle(cx, cy, cw, ch);
+        rounded(cr, cx, cy, cw, ch, 7.0);
         let _ = cr.fill();
-    }
-    if let Some(border) = token("theme_border") {
-        set_rgba(cr, border, None);
-        cr.set_line_width(1.0);
-        cr.rectangle(cx + 0.5, cy + 0.5, cw - 1.0, ch - 1.0);
-        let _ = cr.stroke();
     }
     if let Some(fg) = token("theme_text") {
         set_rgba(cr, fg, None);
         cr.move_to(cx + pad_x - ext.x_bearing(), cy + pad_y - ext.y_bearing());
         let _ = cr.show_text(&label);
     }
+}
+
+/// A rounded rectangle path (the 2.0 small radius).
+fn rounded(cr: &Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
+    let r = r.min(w / 2.0).min(h / 2.0);
+    let pi = std::f64::consts::PI;
+    cr.new_sub_path();
+    cr.arc(x + w - r, y + r, r, -pi / 2.0, 0.0);
+    cr.arc(x + w - r, y + h - r, r, 0.0, pi / 2.0);
+    cr.arc(x + r, y + h - r, r, pi / 2.0, pi);
+    cr.arc(x + r, y + r, r, pi, 3.0 * pi / 2.0);
+    cr.close_path();
 }
 
 fn paint_magnifier(sess: &Session, cr: &Context, layout: Rect, ww: f64, wh: f64) {

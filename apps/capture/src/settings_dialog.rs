@@ -9,7 +9,7 @@ use nyx_ui::settings_card::{self, Spec};
 pub use nyx_ui::settings_card::fit;
 
 const GROUPS: &[(&str, &str, &str)] = &[
-    ("Capture window", "applications-graphics-symbolic", "Theme, glow, motion"),
+    ("Capture window", "applications-graphics-symbolic", "Theme, accent, motion"),
     ("Capture", "camera-photo-symbolic", "What happens after a shot"),
     ("History", "document-open-recent-symbolic", "Keep, search, and forget captures"),
     ("OCR", "edit-find-symbolic", "Tesseract and RapidOCR"),

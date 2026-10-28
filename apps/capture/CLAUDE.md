@@ -1,9 +1,15 @@
 # Capture — notes for working on this app
 
-- GTK4 (`gtk4` 0.11, `v4_18`) + Rust. No libadwaita. The history window follows
-  Music: a flat sidebar (`hexpand` false, 250 px, icons under 980 px), the page, and a
-  status bar. Settings is `nyx_ui::settings_card` (groups in `settings_dialog::GROUPS`).
-  Colors are `@theme_*` tokens (cairo reads `theme::palette()`).
+- GTK4 (`gtk4` 0.11, `v4_18`) + Rust. No libadwaita. Nyx Design 2.0
+  (`nyx_theme::use_design_2`, see nyx-design `STYLE.md`). The history window: one
+  unified header (`chrome::app_header`) with the page as its subtitle and the sidebar
+  toggle, search in the middle (the selection's count and actions while captures are
+  selected), the count, the capture and recording actions and Settings at the end; a
+  flat sidebar (`hexpand` false, icons under 980 px) and the grid. No status bar. The
+  editor has the same header (the shot's title; undo, redo, redact, more, save, copy)
+  with the tools centred under the shot. Settings is `nyx_ui::settings_card` (groups in
+  `settings_dialog::GROUPS`); its Accent row replaces Glow. Colors are `@theme_*`
+  tokens (cairo reads `theme::palette()`).
 - `crates/nyx-capture-core` owns grim capture, slurp, hyprctl geometry (windows only on
   visible workspaces; transforms 1/3/5/7 swap sides), dual OCR (Tesseract default, words
   grouped by block/paragraph/line; RapidOCR lazy fallback, models only when present or
@@ -40,6 +46,9 @@
 - `apps/capture-glimpse` searches `capture.sqlite` read-only (immutable when the WAL files
   can't be made). History hits copy OCR text. `capture region` / `window` / `screen` return
   activate tokens; Glimpse launches `nyx-capture --region` (etc.) on the host.
-- Layout stills: `CAPTURE_SNAPSHOT=/tmp/capture.png nyx-capture`.
+- Layout checks: run a test copy under `NYX_CAPTURE_APP_ID=io.github.design_nexus.nyx.CaptureTest`
+  with scratch `XDG_CONFIG_HOME`/`XDG_DATA_HOME`/`XDG_CACHE_HOME` on a virtual monitor of
+  its own; `--monitor <that output> --edit` fills the scratch history and opens the
+  editor. Pins and the overlay keep their own classes, so don't open them from a test copy.
 - Checks: `cargo test -p nyx-capture-core -p nyx-capture -p nyx-capture-glimpse`
   and clippy `-D warnings` on those packages.

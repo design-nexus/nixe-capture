@@ -7,6 +7,7 @@ use gtk::gdk;
 
 pub fn install() {
     install_icons();
+    nyx_theme::use_design_2();
     nyx_theme::install(Style {
         window_class: "capture-window",
         base_skip: &[],

@@ -21,7 +21,12 @@ use nyx_capture_core::action::{self, Action, Outcome};
 use nyx_capture_core::capture::CaptureMode;
 use nyx_capture_core::ocr::OcrMode;
 
-pub const APP_ID: &str = "io.github.design_nexus.nyx.Capture";
+const DEFAULT_APP_ID: &str = "io.github.design_nexus.nyx.Capture";
+
+/// The application ID: `NYX_CAPTURE_APP_ID` runs a test copy beside the real one.
+pub fn app_id() -> String {
+    std::env::var("NYX_CAPTURE_APP_ID").unwrap_or_else(|_| DEFAULT_APP_ID.into())
+}
 
 const USAGE: &str = "Usage: nyx-capture [OPTIONS]\n\
 \n\
@@ -129,7 +134,7 @@ fn main() -> glib::ExitCode {
         unsafe { std::env::set_var("GSK_RENDERER", "ngl") };
     }
 
-    let app = gtk::Application::builder().application_id(APP_ID).flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE).build();
+    let app = gtk::Application::builder().application_id(app_id()).flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE).build();
     app.connect_startup(|app| {
         theme::install();
         overlay::mark_theme_installed();
@@ -185,7 +190,7 @@ fn main() -> glib::ExitCode {
 /// Session bus name of a live Capture window. A second `--region --copy` must
 /// reach that process so two Exclusive overlays never fight.
 fn primary_running() -> bool {
-    name_owned(APP_ID)
+    name_owned(&app_id())
 }
 
 fn name_owned(name: &str) -> bool {
