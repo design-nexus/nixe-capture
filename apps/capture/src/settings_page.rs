@@ -1,7 +1,6 @@
 //! The settings card's groups.
 
 use crate::prefs;
-use crate::theme;
 use crate::widgets::{self, Page};
 use crate::window;
 use gtk::gio;
@@ -11,50 +10,11 @@ use nyx_capture_core::detect::Tools;
 use std::path::Path;
 
 pub fn build(page: &Page) {
-    window_group(page);
     capture_group(page);
     history_group(page);
     privacy_group(page);
     ocr_group(page);
     record_group(page);
-    keyboard(page);
-}
-
-fn window_group(page: &Page) {
-    let group = page.group("Capture window");
-    group.add(&nyx_ui::widgets::start_row());
-    let prefs = prefs::get();
-    let options: Vec<(String, String)> = theme::all().iter().map(|t| (t.id.clone(), t.name.clone())).collect();
-    let (theme_row, theme_dd) =
-        widgets::choice_row("Theme", "A bundled theme, or one of your own.", options, &prefs.theme, |id| {
-            prefs::update(|p| {
-                p.theme = id;
-                p.mode = prefs::ThemeMode::Theme;
-            });
-            theme::apply();
-        });
-    theme_dd.set_sensitive(prefs.mode == prefs::ThemeMode::Theme || !theme::omarchy_available());
-    if theme::omarchy_available() {
-        let dd = theme_dd.clone();
-        let (row, _) = widgets::switch_row(
-            "Follow Omarchy theme",
-            "Match the desktop's colors and update when the Omarchy theme changes.",
-            prefs.mode == prefs::ThemeMode::Omarchy,
-            move |on| {
-                prefs::update(|p| p.mode = if on { prefs::ThemeMode::Omarchy } else { prefs::ThemeMode::Theme });
-                dd.set_sensitive(!on);
-                theme::apply();
-            },
-        );
-        group.add(&row);
-    }
-    group.add(&theme_row);
-    group.add(&nyx_ui::widgets::accent_row("capture"));
-    let (row, _) = widgets::switch_row("Reduce motion", "Turn off transitions in this window.", prefs.reduce_motion, |on| {
-        prefs::update(|p| p.reduce_motion = on);
-        theme::apply();
-    });
-    group.add(&row);
 }
 
 fn capture_group(page: &Page) {
@@ -352,12 +312,3 @@ fn record_group(page: &Page) {
     }
 }
 
-fn keyboard(page: &Page) {
-    let group = page.group("Keyboard");
-    let list = widgets::vbox(0);
-    list.add_css_class("group-list");
-    for (keys, what) in window::SHORTCUTS {
-        list.append(&widgets::row(what, "", Some(widgets::key_caps(keys).upcast_ref())));
-    }
-    group.add(&list);
-}
